@@ -1,0 +1,16 @@
+/* App-specific styles */
+.gallery-placeholder {
+  flex-grow: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--surface-card);
+  border-radius: var(--border-radius);
+  margin: 0.5rem;
+}
+
+.gallery-message {
+  font-size: 1.5rem;
+  color: var(--text-color-secondary);
+  font-weight: 300;
+}

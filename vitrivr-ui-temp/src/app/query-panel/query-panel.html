@@ -1,0 +1,55 @@
+<p-card header="Query Panel" [style]="{'width': '300px', 'min-width': '280px'}" styleClass="p-shadow-3 p-mr-3 p-flex-shrink-0">
+  <!-- Time Range Section -->
+  <div class="p-field p-mb-4">
+    <h5>Time Range</h5>
+    <!-- TODO: Extract better time Range when real data is present -->
+    <p-slider [(ngModel)]="timeRange" [range]="true" [min]="0" [max]="100" (onChange)="onTimeRangeChange()"></p-slider>
+    <div class="p-text-center p-text-sm p-text-500" style="margin-top: 1rem;">
+      {{timeRange[0]}} - {{timeRange[1]}}
+    </div>
+  </div>
+
+  <!-- Geographical Search Section -->
+  <div class="p-field p-mb-4">
+    <h5>Geographical Search</h5>
+    <p class="p-text-sm p-text-secondary">Choose one search method:</p>
+
+    <div class="search-tabs p-mb-2">
+      <div class="tab-header p-d-flex">
+        <div class="tab-item p-flex-1" [class.active]="!spatialSearchActive" (click)="spatialSearchActive = false">
+          <span>City Search</span>
+        </div>
+        <div class="tab-item p-flex-1" [class.active]="spatialSearchActive" (click)="spatialSearchActive = true">
+          <span>Map Drawing</span>
+        </div>
+      </div>
+
+      <!-- City Search Tab -->
+      <div class="tab-content p-mt-2" *ngIf="!spatialSearchActive">
+        <input type="text" pInputText [(ngModel)]="citySearchTerm"
+               (input)="onCitySearchChange()"
+               placeholder="City (e.g., Dublin)"
+               class="p-inputtext-sm p-w-full" />
+        <small class="p-text-secondary">Search by city or location name</small>
+      </div>
+
+      <!-- Spatial Search Tab -->
+      <div class="tab-content p-mt-2" *ngIf="spatialSearchActive">
+        <div class="draw-buttons">
+          <p-button label="Draw Circle" icon="pi pi-circle-fill"
+                    styleClass="p-button-secondary p-button-sm p-mb-2 p-w-12"></p-button>
+          <p-button label="Draw Box" icon="pi pi-box"
+                    styleClass="p-button-secondary p-button-sm p-w-12"></p-button>
+        </div>
+        <small class="p-text-secondary">Draw a shape on the map to define search area</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Apply Search Button -->
+  <div class="apply-search-wrapper">
+    <p-button label="Apply Search" icon="pi pi-search"
+              (onClick)="onApplySearch()"
+              styleClass="p-button-success p-button-lg p-w-full"></p-button>
+  </div>
+</p-card>

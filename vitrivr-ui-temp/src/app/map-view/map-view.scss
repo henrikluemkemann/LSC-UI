@@ -1,0 +1,23 @@
+.map-container {
+  flex-grow: 1;
+  height: 100%;
+  border-radius: var(--border-radius); // small rounded corners
+  overflow: hidden;
+  position: relative;
+}
+
+:host {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+:host ::ng-deep {
+  .leaflet-container {
+    height: 100%;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+}

@@ -1,0 +1,20 @@
+:host {
+  display: block;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center; // vertical center?
+  height: 60px;
+  padding: 0 1rem;
+  background-color: var(--surface-0);
+  box-shadow: var(--shadow-1);
+}
+
+.header-left,
+.header-right {
+  display: flex;
+  align-items: center;
+}
