@@ -8,7 +8,6 @@
 
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterOutlet } from '@angular/router';
 
 import { HeaderComponent } from './header/header';
 import { QueryPanelComponent } from './query-panel/query-panel';
@@ -19,7 +18,6 @@ import { MapViewComponent } from './map-view/map-view'; // Map component
   standalone: true,
   imports: [
     CommonModule,
-    RouterOutlet,
     HeaderComponent,
     QueryPanelComponent,
     MapViewComponent
