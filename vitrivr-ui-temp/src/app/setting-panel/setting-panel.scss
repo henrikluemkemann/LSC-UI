@@ -1,0 +1,64 @@
+:host ::ng-deep {
+  .p-sidebar-md {
+    width: 25rem;
+  }
+  .p-sidebar-header h3 .pi {
+    margin-right: 0.5rem;
+    vertical-align: middle;
+  }
+
+  .p-fieldset {
+    border-color: var(--surface-200);
+    .p-fieldset-legend {
+      font-weight: 600;
+      background: transparent;
+      border: none;
+    }
+  }
+}
+
+.settings-container {
+  padding: 0.5rem;
+}
+
+.layer-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.layer-option-card {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--surface-200);
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, box-shadow 0.2s;
+
+  &:hover {
+    background-color: var(--surface-hover);
+    border-color: var(--primary-color);
+  }
+
+  .radio-button-wrapper {
+    margin-right: 1rem;
+  }
+
+  .option-details {
+    display: flex;
+    align-items: center;
+    font-size: 1rem;
+
+    i {
+      font-size: 1.2rem;
+      margin-right: 0.75rem;
+      color: var(--primary-color);
+    }
+
+    label {
+      font-weight: 500;
+      cursor: pointer;
+    }
+  }
+}

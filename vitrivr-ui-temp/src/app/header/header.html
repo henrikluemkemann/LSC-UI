@@ -1,6 +1,11 @@
 <div class="header-container">
     <div class="header-left">
-        <p-button label="Settings" icon="pi pi-cog" styleClass="p-button-text p-button-lg"></p-button>
+        <p-button
+                label="Settings"
+                icon="pi pi-cog"
+                styleClass="p-button-text p-button-lg"
+                (onClick)="onSettingsClick()">
+        </p-button>
 
         <div *ngIf="isDrawingModeActive" class="cancel-drawing-wrapper">
             <p-button

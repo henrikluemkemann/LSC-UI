@@ -5,6 +5,7 @@ import { QueryPanelComponent } from './query-panel/query-panel';
 import { MapViewComponent, MapState } from './map-view/map-view';
 import { MapDrawingService } from './services/map-drawing.service';
 import { LoggingService } from './services/logging.service';
+import { SettingsPanelComponent } from './setting-panel/setting-panel';
 
 /**
  * Root component of the Vitrivr LSC UI application
@@ -20,7 +21,8 @@ import { LoggingService } from './services/logging.service';
     CommonModule,
     HeaderComponent,
     QueryPanelComponent,
-    MapViewComponent
+    MapViewComponent,
+    SettingsPanelComponent
   ],
   templateUrl: './app.html',
   styleUrls: ['./app.scss']
@@ -39,6 +41,11 @@ export class AppComponent {
    * This allows the map state to be preserved when switching between views
    */
   mapState: MapState | null = null;
+
+  /**
+   * Tracks the visibility of the settings panel.
+   */
+  isSettingsPanelVisible = false;
 
   /**
    * Constructor for the AppComponent
@@ -73,6 +80,20 @@ export class AppComponent {
       this.mapDrawingService.exitDrawingMode();
     }
     this.currentView = view;
+  }
+
+  /**
+   * Toggles the visibility of the settings panel.
+   */
+  toggleSettingsPanel(): void {
+    this.isSettingsPanelVisible = !this.isSettingsPanelVisible;
+  }
+
+  /**
+   * Explicitly closes the settings panel.
+   */
+  closeSettingsPanel(): void {
+    this.isSettingsPanelVisible = false;
   }
 
   /**

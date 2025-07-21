@@ -2,6 +2,7 @@ import { Component, AfterViewInit, OnDestroy, ElementRef, HostListener, Input, O
 import * as L from 'leaflet';
 import { LeafletModule } from '@asymmetrik/ngx-leaflet';
 import { MapDrawingService } from '../services/map-drawing.service';
+import { MapLayerService, MapLayer } from '../services/map-layer.service';
 import { LoggingService } from '../services/logging.service';
 import { Subscription } from 'rxjs';
 import { ToastModule } from 'primeng/toast';
@@ -79,14 +80,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
    * Includes the tile layer, initial zoom level, and center coordinates
    */
   options: L.MapOptions = {
-    layers: [
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      })
-    ],
+    layers: [],
     zoom: 10,
     center: L.latLng(53.3498, -6.2603) // Dublin coordinates for now since LSC dataset has many images there
   };
+
+  private tileLayer: L.TileLayer | null = null;
 
   /**
    * Flag indicating whether circle drawing mode is active
@@ -116,11 +115,13 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
    * @param mapDrawingService Service for managing map drawing operations
    * @param elementRef Reference to the component's DOM element
    * @param loggingService Service for logging status changes
+   * @param mapLayerService Service for different map representations
    */
   constructor(
       private mapDrawingService: MapDrawingService,
       private elementRef: ElementRef,
-      private loggingService: LoggingService
+      private loggingService: LoggingService,
+      private mapLayerService: MapLayerService
   ) {}
 
   /**
@@ -176,6 +177,14 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     this.map = map;
+
+    // Subscribe to map layer changes
+    this.subscriptions.push(
+        this.mapLayerService.selectedLayer$.subscribe(layer => {
+          this.updateTileLayer(layer);
+        })
+    );
+
     this.map.on('moveend', this.onMapMove.bind(this));
     this.map.on('zoomend', this.onMapMove.bind(this));
 
@@ -183,6 +192,27 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.initialMapState?.circle) {
       this.updateCircle(this.initialMapState.circle.center, this.initialMapState.circle.radius);
     }
+  }
+
+
+  /**
+   * Updates the tile layer on the map.
+   * @param layer The new map layer to apply.
+   */
+  updateTileLayer(layer: MapLayer): void {
+    if (!this.map) return;
+
+    // Removes the old tile layer if it exists
+    if (this.tileLayer) {
+      this.map.removeLayer(this.tileLayer);
+    }
+
+    // Create and add the new tile layer
+    this.tileLayer = L.tileLayer(layer.url, {
+      attribution: layer.attribution
+    }).addTo(this.map);
+
+    this.loggingService.info('MapViewComponent', 'Tile layer updated', { layerName: layer.name });
   }
 
   /**

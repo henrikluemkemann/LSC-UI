@@ -1,9 +1,39 @@
 <p-card header="Query Panel" [style]="{'width': '300px', 'min-width': '280px'}" styleClass="p-shadow-3 p-mr-3 p-flex-shrink-0">
     <div class="p-field p-mb-4">
         <h5>Time Range</h5>
-        <p-slider [(ngModel)]="timeRange" [range]="true" [min]="0" [max]="100" (onChange)="onTimeRangeChange()"></p-slider>
-        <div class="p-text-center p-text-sm p-text-500" style="margin-top: 1rem;">
-            {{timeRange[0]}} - {{timeRange[1]}}
+        <div class="time-range-container">
+            <p-calendar
+                    [(ngModel)]="dateRange"
+                    [showIcon]="true"
+                    [selectionMode]="'range'"
+                    [readonlyInput]="true"
+                    [showTime]="true"
+                    hourFormat="24"
+                    dateFormat="dd.mm.yy"
+                    [hideOnDateTimeSelect]="false"
+                    [showButtonBar]="true"
+                    [appendTo]="'body'"
+                    placeholder="Select date and time range"
+                    [style]="{ width: '380px' }"
+                    [inputStyle]="{ fontSize: '0.9rem' }"
+                    styleClass="p-calendar-fixed"
+                    (onSelect)="onDateSelect()">
+            </p-calendar>
+
+            <p-button
+                    *ngIf="showApplyTimeButton"
+                    label="Apply Time Range"
+                    icon="pi pi-check"
+                    (onClick)="onApplyTimeFrame()"
+                    [disabled]="!dateRange || !dateRange[1]"
+                    [style]="{ width: '260px' }"
+                    styleClass="p-button-sm p-mt-2 p-button-success">
+            </p-button>
+
+            <div *ngIf="appliedDateRange" class="applied-range-display p-mt-2">
+                <strong>Applied Range:</strong>
+                <span>{{ appliedDateRange[0] | date:'dd.MM.yyyy, HH:mm' }} - {{ appliedDateRange[1] | date:'dd.MM.yyyy, HH:mm' }}</span>
+            </div>
         </div>
     </div>
 

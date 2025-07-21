@@ -10,6 +10,10 @@ import { SliderModule } from 'primeng/slider';
 import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectButtonModule } from 'primeng/selectbutton';
+import { CalendarModule } from 'primeng/calendar';
+import { SidebarModule } from 'primeng/sidebar';
+import { RadioButtonModule } from 'primeng/radiobutton';
+import { FieldsetModule } from 'primeng/fieldset';
 
 import { routes } from './app.routes';
 
@@ -25,7 +29,11 @@ export const appConfig: ApplicationConfig = {
       SliderModule,
       CardModule,
       InputTextModule,
-      SelectButtonModule
-    )
+      SelectButtonModule,
+      CalendarModule,
+      SidebarModule,
+      RadioButtonModule,
+      FieldsetModule
+)
   ]
 };

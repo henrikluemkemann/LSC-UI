@@ -23,6 +23,41 @@
   }
 }
 
+:host ::ng-deep {
+  .p-calendar-fixed {
+    width: 380px !important;
+    margin-bottom: 1rem;
+
+    .p-inputtext {
+      font-size: 0.7rem !important;
+      width: 100% !important;
+    }
+
+    .p-inputwrapper {
+      width: 100% !important;
+    }
+  }
+
+  .applied-range-display {
+    width: 260px;
+    box-sizing: border-box;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--surface-100);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--surface-200);
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-color-secondary);
+
+    span {
+      font-weight: 600;
+      color: var(--text-color);
+      margin-left: 0.5rem;
+    }
+  }
+}
+
+
 .p-selectbutton .p-button.p-highlight {
   background: var(--primary-color, #3B82F6);
   color: var(--primary-color-text, #ffffff);

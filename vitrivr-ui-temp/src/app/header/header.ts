@@ -14,7 +14,7 @@ import { CommonModule } from '@angular/common';
  * This component provides:
  * - A view selector to switch between Map and Gallery views
  * - A cancel drawing button that appears when drawing mode is active
- * - Settings button (TODO: functionality to be implemented)
+ * - Settings button (TODO: more functionality to be added)
  *
  * It communicates with the parent component through the viewChange event
  * and with the MapDrawingService to track and control drawing mode.
@@ -32,6 +32,7 @@ export class HeaderComponent implements OnDestroy {
    * Emits the selected view (map or gallery) when the user changes the view
    */
   @Output() viewChange = new EventEmitter<string>();
+  @Output() settingsClick = new EventEmitter<void>();
 
   /**
    * Options for the view selection buttons
@@ -87,6 +88,14 @@ export class HeaderComponent implements OnDestroy {
   onViewChange() {
     this.loggingService.info('HeaderComponent', 'View changed', { view: this.selectedView });
     this.viewChange.emit(this.selectedView);
+  }
+
+  /**
+   * Handles clicks on the Settings button
+   */
+  onSettingsClick() {
+    this.loggingService.info('HeaderComponent', 'Settings button clicked');
+    this.settingsClick.emit();
   }
 
   /**

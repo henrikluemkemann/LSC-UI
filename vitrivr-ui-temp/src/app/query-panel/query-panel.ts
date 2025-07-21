@@ -12,6 +12,7 @@ import { MapDrawingService } from '../services/map-drawing.service';
 import { LoggingService } from '../services/logging.service';
 import { Subscription } from 'rxjs';
 import * as L from 'leaflet';
+import { CalendarModule } from 'primeng/calendar';
 
 /**
  * Component for building and managing search queries
@@ -35,7 +36,8 @@ import * as L from 'leaflet';
     InputTextModule,
     CommonModule,
     SelectButtonModule,
-    ToastModule
+    ToastModule,
+    CalendarModule
   ],
   templateUrl: './query-panel.html',
   styleUrls: ['./query-panel.scss'],
@@ -44,10 +46,19 @@ import * as L from 'leaflet';
 export class QueryPanelComponent implements OnInit, OnDestroy {
 
   /**
-   * The selected time range for filtering results
-   * [min, max] values between 0 and 100 (for now) TODO: find better values here
+   * The selected date range from the calendar component.
    */
-  timeRange: number[] = [0, 100];
+  dateRange: Date[] | undefined;
+
+  /**
+   * The applied date range, used for visual confirmation.
+   */
+  appliedDateRange: Date[] | undefined;
+
+  /**
+   * Controls the visibility of the "Apply Time Range" button.
+   */
+  showApplyTimeButton: boolean = true;
 
   /**
    * The city name to search for
@@ -243,11 +254,31 @@ export class QueryPanelComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handles changes to the time range slider
-   * This is a placeholder for future implementation
+   * Applies the selected time frame and provides visual confirmation.
    */
-  onTimeRangeChange() {
-    this.loggingService.info('QueryPanelComponent', 'Time range changed', { range: this.timeRange });
+  onApplyTimeFrame() {
+    if (this.dateRange && this.dateRange[0] && this.dateRange[1]) {
+      this.appliedDateRange = this.dateRange;
+      this.showApplyTimeButton = false;
+      this.loggingService.info('QueryPanelComponent', 'Time frame applied', { range: this.appliedDateRange });
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Time Range Set',
+        detail: 'The Time range has been applied successfully.',
+        life: 3000
+      });
+    } else {
+      this.loggingService.warn('QueryPanelComponent', 'Attempted to apply an invalid time frame.');
+    }
+  }
+
+  /**
+   * Shows the apply button and clears the visual confirmation when the user changes the date.
+   */
+  onDateSelect() {
+    this.showApplyTimeButton = true;
+    this.appliedDateRange = undefined;
+    this.loggingService.info('QueryPanelComponent', 'Date range selection changed by user.');
   }
 
   /**
@@ -267,7 +298,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy {
    */
   onApplySearch() {
     this.loggingService.info('QueryPanelComponent', 'Search applied', {
-      timeRange: this.timeRange,
+      timeRange: this.appliedDateRange,
       citySearchTerm: this.citySearchTerm,
       activeTab: this.activeTab,
       hasCircle: !!this.selectedPoint

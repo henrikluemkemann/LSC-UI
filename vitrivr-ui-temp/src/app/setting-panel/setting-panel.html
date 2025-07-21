@@ -1,0 +1,37 @@
+<p-sidebar
+  [(visible)]="isVisible"
+  position="left"
+  (onHide)="onHide()"
+  styleClass="p-sidebar-md"
+  [transitionOptions]="'650ms cubic-bezier(0.25, 0.8, 0.25, 1)'">
+  <ng-template pTemplate="header">
+    <h3><i class="pi pi-sliders-h p-mr-2"></i>Settings</h3>
+  </ng-template>
+
+  <ng-template pTemplate="content">
+    <div class="settings-container">
+      <p-fieldset legend="Map Language" [toggleable]="true">
+        <div class="layer-options">
+          <div *ngFor="let layer of layers" class="layer-option-card" (click)="selectedLayerName = layer.name; onLayerChange()">
+            <div class="radio-button-wrapper">
+              <p-radioButton
+                [name]="'mapLayer'"
+                [value]="layer.name"
+                [(ngModel)]="selectedLayerName"
+                [inputId]="layer.name">
+              </p-radioButton>
+            </div>
+            <div class="option-details">
+              <i [class]="layer.icon"></i>
+              <label [for]="layer.name">{{ layer.name }}</label>
+            </div>
+          </div>
+        </div>
+      </p-fieldset>
+
+      <p-fieldset legend="UI-Language" [toggleable]="true" [collapsed]="true">
+        <p>Placeholder</p>
+      </p-fieldset>
+    </div>
+  </ng-template>
+</p-sidebar>
