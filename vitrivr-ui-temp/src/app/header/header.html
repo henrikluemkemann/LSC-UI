@@ -1,15 +1,24 @@
 <div class="header-container">
-  <div class="header-left">
-    <p-button label="Settings" icon="pi pi-cog" styleClass="p-button-text p-button-lg"></p-button>
-  </div>
+    <div class="header-left">
+        <p-button label="Settings" icon="pi pi-cog" styleClass="p-button-text p-button-lg"></p-button>
 
-  <div class="header-right">
-    <p-selectButton
-      [options]="viewOptions"
-      [(ngModel)]="selectedView"
-      optionLabel="label"
-      optionValue="value"
-      (onChange)="onViewChange()"
-    ></p-selectButton>
-  </div>
+        <div *ngIf="isDrawingModeActive" class="cancel-drawing-wrapper">
+            <p-button
+                    label="Cancel Drawing"
+                    icon="pi pi-times"
+                    styleClass="p-button-danger p-button-sm"
+                    (onClick)="onCancelDrawingClick()">
+            </p-button>
+        </div>
+    </div>
+
+    <div class="header-right">
+        <p-selectButton
+                [options]="viewOptions"
+                [(ngModel)]="selectedView"
+                optionLabel="label"
+                optionValue="value"
+                (onChange)="onViewChange()"
+        ></p-selectButton>
+    </div>
 </div>

@@ -1,7 +1,11 @@
 <app-header (viewChange)="onViewChange($event)"></app-header>
 <div class="app-content-area">
     <app-query-panel></app-query-panel>
-    <app-map-view *ngIf="currentView === 'map'"></app-map-view>
+    <app-map-view
+            *ngIf="currentView === 'map'"
+            [initialMapState]="mapState"
+            (mapStateChange)="onMapStateChange($event)">
+    </app-map-view>
     <div *ngIf="currentView === 'gallery'" class="gallery-placeholder">
         <div class="gallery-message">Gallery View (Placeholder)</div>
     </div>

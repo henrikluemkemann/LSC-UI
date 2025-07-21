@@ -6,7 +6,7 @@
 .header-container {
   display: flex;
   justify-content: space-between;
-  align-items: center; // vertical center?
+  align-items: center;
   height: 60px;
   padding: 0 1rem;
   background-color: var(--surface-0);
@@ -17,4 +17,8 @@
 .header-right {
   display: flex;
   align-items: center;
+}
+
+.cancel-drawing-wrapper {
+  margin-left: 1rem;
 }

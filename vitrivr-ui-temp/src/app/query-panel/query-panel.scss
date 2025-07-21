@@ -16,20 +16,29 @@
     flex-grow: 1;
     padding-bottom: 1.5rem;
   }
+
+  .p-slider {
+    width: 95%;
+    margin: 0.75rem auto 0 auto;
+  }
+}
+
+.p-selectbutton .p-button.p-highlight {
+  background: var(--primary-color, #3B82F6);
+  color: var(--primary-color-text, #ffffff);
 }
 
 h5 {
-  color: var(--text-color-secondary); // Lighter text for labels
+  color: var(--text-color-secondary);
   margin-top: 0.5rem;
   margin-bottom: 0.75rem;
-  font-weight: 600; // Slightly bolder
+  font-weight: 600;
 }
 
 .p-field {
-  margin-bottom: 1.5rem; // Consistent spacing between fields
+  margin-bottom: 1.5rem;
 }
 
-// Styling for the search tabs
 .search-tabs {
   border: 1px solid var(--surface-border, #dee2e6);
   border-radius: 6px;
@@ -47,7 +56,7 @@ h5 {
       transition: background-color 0.2s, color 0.2s;
       border-bottom: 1px solid var(--surface-border, #dee2e6);
 
-      &:first-child {
+      &:not(:last-child) {
         border-right: 1px solid var(--surface-border, #dee2e6);
       }
 
@@ -69,21 +78,25 @@ h5 {
     background-color: var(--surface-card, #ffffff);
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
 
     small {
       margin-top: 0.5rem;
       color: var(--text-color-secondary, #6c757d);
       text-align: center;
     }
+  }
+}
 
-    .draw-buttons {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
+.draw-buttons-container {
+  display: flex;
+  justify-content: space-around;
+  width: 100%;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+
+  .p-button {
+    flex: 1;
   }
 }
 
