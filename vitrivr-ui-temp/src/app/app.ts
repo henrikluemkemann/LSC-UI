@@ -6,13 +6,15 @@ import { MapViewComponent, MapState } from './map-view/map-view';
 import { MapDrawingService } from './services/map-drawing.service';
 import { LoggingService } from './services/logging.service';
 import { SettingsPanelComponent } from './setting-panel/setting-panel';
+import {ProgressSpinnerModule} from "primeng/progressspinner";
+import {Button} from "primeng/button";
 
 /**
  * Root component of the Vitrivr LSC UI application
  *
  * This component serves as the main container for the application and coordinates
  * the interactions between child components. It manages the current view state
- * (map or gallery) and preserves the map state when switching views.
+ * (map, gallery or results (if activated)) and preserves the map state when switching views.
  */
 @Component({
   selector: 'app-root',
@@ -22,14 +24,14 @@ import { SettingsPanelComponent } from './setting-panel/setting-panel';
     HeaderComponent,
     QueryPanelComponent,
     MapViewComponent,
-    SettingsPanelComponent
+    SettingsPanelComponent,
+    ProgressSpinnerModule,
+    Button
   ],
   templateUrl: './app.html',
   styleUrls: ['./app.scss']
 })
 export class AppComponent {
-  title = 'LSC-UI'; // this shows up in the browser
-
   /**
    * Tracks the current view mode of the application.
    * Possible values: map or gallery
@@ -46,6 +48,26 @@ export class AppComponent {
    * Tracks the visibility of the settings panel.
    */
   isSettingsPanelVisible = false;
+
+  /**
+   * Stores the results from a successful query to be displayed in the results view.
+   */
+  queryResults: any | null = null;
+
+  /**
+   * Flag to indicate whether results are currently loading.
+   * Used to display the loading spinner in the results view.
+   */
+  isLoadingResults: boolean = false;
+
+  /**
+   * Handles the change in loading state by updating the `isLoadingResults` property.
+   *
+   * @param {boolean} isLoading Indicates the new loading state. `true` if loading, `false` otherwise.
+   */
+  onLoadingStateChange(isLoading: boolean): void {
+    this.isLoadingResults = isLoading;
+  }
 
   /**
    * Constructor for the AppComponent
@@ -80,6 +102,38 @@ export class AppComponent {
       this.mapDrawingService.exitDrawingMode();
     }
     this.currentView = view;
+  }
+
+  /**
+   * Handles successful query event from the QueryPanelComponent.
+   * @param results The results object from the backend API.
+   */
+  onQueryResults(results: any) {
+    this.queryResults = results;
+    this.currentView = 'results';
+  }
+
+  onBackToMap(): void {
+    this.loggingService.info('AppComponent', 'Back to map clicked');
+    this.currentView = 'map';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+
+  downloadResultsAsJson(): void {
+    if (!this.queryResults) return;
+
+    const jsonBlob = new Blob(
+        [JSON.stringify(this.queryResults, null, 2)],
+        { type: 'application/json' }
+    );
+
+    const url = URL.createObjectURL(jsonBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'query-results.json';
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   /**

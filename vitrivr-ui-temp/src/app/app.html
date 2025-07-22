@@ -1,15 +1,63 @@
-<app-header (viewChange)="onViewChange($event)" (settingsClick)="toggleSettingsPanel()"></app-header>
+<app-header
+        [selectedView]="currentView"
+        (viewChange)="onViewChange($event)"
+        (settingsClick)="toggleSettingsPanel()">
+</app-header>
+
 <div class="app-content-area">
-    <app-query-panel></app-query-panel>
+    <app-query-panel
+            (querySuccess)="onQueryResults($event)"
+            (loadingStateChange)="onLoadingStateChange($event)">
+    </app-query-panel>
+
     <app-map-view
             *ngIf="currentView === 'map'"
             [initialMapState]="mapState"
             (mapStateChange)="onMapStateChange($event)">
     </app-map-view>
+
     <div *ngIf="currentView === 'gallery'" class="gallery-placeholder">
         <div class="gallery-message">Gallery View (Placeholder)</div>
     </div>
+
+    <div *ngIf="currentView === 'results'" class="results-wrapper">
+        <div class="results-container p-card p-shadow-2">
+          <div class="background-overlay"></div>
+            <div class="p-d-flex p-jc-between p-ai-center p-mb-3">
+                <h2 class="p-text-secondary">Query Results</h2>
+
+                <div class="results-actions p-d-flex p-ai-center" *ngIf="!isLoadingResults">
+
+                    <p-button
+                            label="Back to Map"
+                            icon="pi pi-map"
+                            styleClass="p-button-secondary"
+                            (onClick)="onBackToMap()">
+                    </p-button>
+
+                    <p-button
+                            label="Download JSON"
+                            icon="pi pi-download"
+                            styleClass="p-button-success p-ml-3"
+                            (onClick)="downloadResultsAsJson()">
+                    </p-button>
+                </div>
+            </div>
+
+            <p-progressSpinner
+                    *ngIf="isLoadingResults"
+                    styleClass="custom-spinner">
+            </p-progressSpinner>
+
+            <div class="json-viewer" *ngIf="!isLoadingResults">
+                <pre>{{ queryResults | json }}</pre>
+            </div>
+
+        </div>
+    </div>
 </div>
 
-<app-setting-panel *ngIf="isSettingsPanelVisible" (closePanel)="closeSettingsPanel()">
+<app-setting-panel
+        *ngIf="isSettingsPanelVisible"
+        (closePanel)="closeSettingsPanel()">
 </app-setting-panel>

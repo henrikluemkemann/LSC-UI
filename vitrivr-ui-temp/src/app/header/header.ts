@@ -1,6 +1,7 @@
-import { Component, EventEmitter, Output, OnDestroy } from '@angular/core';
+import {Component, EventEmitter, Output, OnDestroy, Input} from '@angular/core';
 import { ButtonModule } from 'primeng/button';
 import { SelectButtonModule } from 'primeng/selectbutton';
+import { SelectButtonChangeEvent } from 'primeng/selectbutton';
 import { FormsModule } from '@angular/forms';
 import { SelectItem } from 'primeng/api';
 import { MapDrawingService } from '../services/map-drawing.service';
@@ -12,7 +13,7 @@ import { CommonModule } from '@angular/common';
  * Component for the application header
  *
  * This component provides:
- * - A view selector to switch between Map and Gallery views
+ * - A view selector to switch between Map, Gallery and Results views
  * - A cancel drawing button that appears when drawing mode is active
  * - Settings button (TODO: more functionality to be added)
  *
@@ -29,7 +30,7 @@ import { CommonModule } from '@angular/common';
 export class HeaderComponent implements OnDestroy {
   /**
    * Event emitter for view changes
-   * Emits the selected view (map or gallery) when the user changes the view
+   * Emits the selected view (map, gallery or results) when the user changes the view
    */
   @Output() viewChange = new EventEmitter<string>();
   @Output() settingsClick = new EventEmitter<void>();
@@ -40,14 +41,15 @@ export class HeaderComponent implements OnDestroy {
    */
   viewOptions: SelectItem[] = [
     { label: 'Map', value: 'map' },
-    { label: 'Gallery', value: 'gallery' }
+    { label: 'Gallery', value: 'gallery' },
+    {label: 'Results', value: 'results'}
   ];
 
   /**
    * The currently selected view
    * Default is map
    */
-  selectedView: string = 'map';
+  @Input() selectedView: string = 'map';
 
   /**
    * Flag indicating whether drawing mode is active
@@ -82,12 +84,21 @@ export class HeaderComponent implements OnDestroy {
   /**
    * Handles view change events from the view selection buttons
    *
-   * This method emits the selected view to the parent component,
-   * which then updates the application to display the selected view.
+   * @param {SelectButtonChangeEvent} event The event object triggered by the view change, containing the new view value.
    */
-  onViewChange() {
-    this.loggingService.info('HeaderComponent', 'View changed', { view: this.selectedView });
-    this.viewChange.emit(this.selectedView);
+  onViewChange(event: SelectButtonChangeEvent) {
+    const newView = event.value as string | undefined;
+    if (newView) {
+      this.selectedView = newView;
+      if (newView === 'results') {
+        setTimeout(() => {
+          const container = document.querySelector('.results-container');
+          container?.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 100);
+      }
+      this.loggingService.info('HeaderComponent', 'View changed', { view: newView });
+      this.viewChange.emit(newView);
+    }
   }
 
   /**

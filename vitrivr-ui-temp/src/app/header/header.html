@@ -20,10 +20,11 @@
     <div class="header-right">
         <p-selectButton
                 [options]="viewOptions"
-                [(ngModel)]="selectedView"
+                [ngModel]="selectedView"
                 optionLabel="label"
                 optionValue="value"
-                (onChange)="onViewChange()"
+                (onChange)="onViewChange($event)"
+                [unselectable]="false"
         ></p-selectButton>
     </div>
 </div>

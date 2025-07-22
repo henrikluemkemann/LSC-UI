@@ -4,6 +4,7 @@
         <div class="time-range-container">
             <p-calendar
                     [(ngModel)]="dateRange"
+                    (ngModelChange)="onDateChange($event)"
                     [showIcon]="true"
                     [selectionMode]="'range'"
                     [readonlyInput]="true"

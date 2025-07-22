@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CardModule } from 'primeng/card';
 import { SliderModule } from 'primeng/slider';
@@ -13,6 +13,7 @@ import { LoggingService } from '../services/logging.service';
 import { Subscription } from 'rxjs';
 import * as L from 'leaflet';
 import { CalendarModule } from 'primeng/calendar';
+import {QueryService, SpatialQuery} from '../services/query.service';
 
 /**
  * Component for building and managing search queries
@@ -44,6 +45,19 @@ import { CalendarModule } from 'primeng/calendar';
   providers: [MessageService]
 })
 export class QueryPanelComponent implements OnInit, OnDestroy {
+  /**
+   * Consumers can subscribe to this emitter
+   * to be notified when a query operation completes successfully.
+   *
+   * @type {EventEmitter<any>}
+   */
+  @Output() querySuccess = new EventEmitter<any>();
+
+  /**
+   * EventEmitter instance that emits a boolean value to indicate a change
+   * in the loading state. True represents a loading state, false a non-loading one.
+   */
+  @Output() loadingStateChange = new EventEmitter<boolean>();
 
   /**
    * The selected date range from the calendar component.
@@ -130,12 +144,14 @@ export class QueryPanelComponent implements OnInit, OnDestroy {
    * @param messageService Service for displaying toast messages
    * @param cdr Angular's ChangeDetectorRef for manually triggering change detection
    * @param loggingService Service for logging status changes
+   * @param queryService Service for constructing and sending Queries
    */
   constructor(
       private mapDrawingService: MapDrawingService,
       private messageService: MessageService,
       private cdr: ChangeDetectorRef,
-      private loggingService: LoggingService
+      private loggingService: LoggingService,
+      private queryService: QueryService
   ) {}
 
   /**
@@ -282,6 +298,35 @@ export class QueryPanelComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Handles model changes from the PrimeNG calendar component.
+   *
+   * This method is triggered whenever the user selects a new date range or clears
+   * the selection. It ensures the component's state is updated correctly in response.
+   *
+   * If the user selects a valid new date range, this method resets the currently
+   * applied time range (appliedDateRange), forcing them to re-apply the new selection.
+   *
+   * If the user clears the selection, the newRange will be invalid, and this method
+   * will clear the appliedDateRange to ensure no time filter is used in later
+   * queries.
+   *
+   * @param newRange The new date range value from the calendar model. Can be an array of dates or null if cleared.
+   */
+  onDateChange(newRange: Date[] | null) {
+    this.dateRange = newRange ?? undefined;
+
+    if (!this.dateRange || this.dateRange.length !== 2 || !this.dateRange[0] || !this.dateRange[1]) {
+      this.appliedDateRange = undefined;
+      this.showApplyTimeButton = true;
+      this.loggingService.info('QueryPanelComponent', 'Date range cleared via ngModelChange');
+      return;
+    }
+
+    this.showApplyTimeButton = true;
+    this.appliedDateRange = undefined;
+  }
+
+  /**
    * Handles changes to the city search input
    *  TODO: placeholder for future implementation
    */
@@ -292,23 +337,73 @@ export class QueryPanelComponent implements OnInit, OnDestroy {
   /**
    * Handles the Apply Search button click
    *
-   * This method: TODO
-   * 1. Exits drawing mode if it's active
-   * 2. Will eventually execute the search with the selected criteria
+   * This method checks the active geographical search tab and constructs
+   * the appropriate SpatialQuery object to be sent to the QueryService.
    */
   onApplySearch() {
+    let spatialQuery: SpatialQuery = null;
+
+    switch (this.activeTab) {
+      case 'circle':
+        const currentCircleData = this.mapDrawingService.currentCircleData.getValue();
+        if (currentCircleData) {
+          spatialQuery = { type: 'circle', data: currentCircleData };
+        }
+        break;
+
+      case 'city':
+        if (this.citySearchTerm) {
+          // For city search, we'll use a fixed radius of 10km for now.
+          // This could be made into an input field.
+          const radiusForCity = 10000;
+          spatialQuery = { type: 'city', data: { name: this.citySearchTerm, radius: radiusForCity } };
+        }
+        break;
+
+      case 'box':
+        // TODO: Implement bounding box drawing and data capture.
+        // For now, this case will do nothing.
+        this.loggingService.warn('QueryPanelComponent', 'Bounding box search is not yet implemented.');
+        this.messageService.add({
+          severity: 'warn',
+          summary: 'Not Implemented',
+          detail: 'Drawing a bounding box is not yet supported.',
+          life: 3000
+        });
+        return;
+    }
+
     this.loggingService.info('QueryPanelComponent', 'Search applied', {
       timeRange: this.appliedDateRange,
-      citySearchTerm: this.citySearchTerm,
-      activeTab: this.activeTab,
-      hasCircle: !!this.selectedPoint
+      spatialQuery: spatialQuery
+    });
+
+    this.queryService.buildAndExecuteQuery(this.appliedDateRange, spatialQuery).subscribe({
+      next: (results) => {
+        this.loggingService.info('QueryPanelComponent', 'Query successful', results);
+
+        // Emit the results
+        this.querySuccess.emit(results);
+        this.loadingStateChange.emit(false);
+      },
+      error: (error) => {
+        this.loggingService.error('QueryPanelComponent', 'Query failed', error);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Search Failed',
+          detail: 'An error occurred while performing the search.',
+          life: 4000
+        });
+        this.loadingStateChange.emit(false);
+      }
     });
 
     if (this.mapDrawingService.isDrawingModeActive()) {
       this.mapDrawingService.exitDrawingMode();
     }
-    // Future implementation: Execute search with selected criteria
+
   }
+
 
   /**
    * Sets the active tab in the geographical search section

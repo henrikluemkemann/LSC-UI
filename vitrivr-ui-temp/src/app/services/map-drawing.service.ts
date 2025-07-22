@@ -49,7 +49,7 @@ export class MapDrawingService {
    * BehaviorSubject that holds the latest circle data
    * This allows components to get the current circle data at any time
    */
-  private currentCircleData = new BehaviorSubject<{center: L.LatLng, radius: number} | null>(null);
+  currentCircleData = new BehaviorSubject<{center: L.LatLng, radius: number} | null>(null);
 
   /**
    * Observable for circle drawing mode activation

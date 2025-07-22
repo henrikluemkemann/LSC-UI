@@ -7,6 +7,8 @@ import { LoggingService } from '../services/logging.service';
 import { Subscription } from 'rxjs';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
+import {ProgressSpinnerModule} from 'primeng/progressspinner';
+import { CommonModule } from '@angular/common';
 
 /**
  * Interface representing the state of the map
@@ -39,7 +41,7 @@ export interface MapState {
 @Component({
   selector: 'app-map-view',
   standalone: true,
-  imports: [LeafletModule, ToastModule],
+  imports: [LeafletModule, ToastModule, ProgressSpinnerModule, CommonModule],
   templateUrl: './map-view.html',
   styleUrls: ['./map-view.scss'],
   providers: [MessageService]
@@ -110,6 +112,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private drawClickHandler: ((e: L.LeafletMouseEvent) => void) | null = null;
 
   /**
+   * Flag to control the visibility of the map loading spinner.
+   * Defaults to true to show the spinner on initialization.
+   */
+  isMapLoading: boolean = true;
+
+  /**
    * Constructor for the MapViewComponent
    *
    * @param mapDrawingService Service for managing map drawing operations
@@ -126,18 +134,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /**
    * Angular lifecycle hook that runs when the component is initialized
-   *
-   * This method applies the initial map state (if provided) to the map options
-   * before the map is created. This ensures that the map opens at the correct
-   * position and zoom level when the component is initialized.
    */
-  ngOnInit(): void {
-    // Apply the saved state before the map is initialized
-    if (this.initialMapState) {
-      this.options.center = this.initialMapState.center;
-      this.options.zoom = this.initialMapState.zoom;
-    }
-  }
+  ngOnInit(): void {}
 
   /**
    * Angular lifecycle hook that runs after the view is initialized
@@ -177,6 +175,27 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     this.map = map;
+    // Load map state twice to avoid weird animation from happening (I didn't find a cleaner fix)
+    if (this.initialMapState) {
+      this.map?.setView(this.initialMapState.center, this.initialMapState.zoom);
+      this.loggingService.info('MapViewComponent', 'Map view restored 1', {
+        center: this.initialMapState.center,
+        zoom: this.initialMapState.zoom
+      });
+    }
+
+    setTimeout(() => {
+      this.map?.invalidateSize();
+
+      if (this.initialMapState) {
+        this.map?.setView(this.initialMapState.center, this.initialMapState.zoom);
+        this.loggingService.info('MapViewComponent', 'Map view restored 2', {
+          center: this.initialMapState.center,
+          zoom: this.initialMapState.zoom
+        });
+      }
+      this.isMapLoading = false;
+    }, 500);
 
     // Subscribe to map layer changes
     this.subscriptions.push(
@@ -334,7 +353,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       this.loggingService.info('MapViewComponent', 'Circle cleared from map');
       this.onMapMove();
       return;
-    };
+    }
 
     this.loggingService.info('MapViewComponent', 'Circle updated on map', {
       center: { lat: center.lat, lng: center.lng },

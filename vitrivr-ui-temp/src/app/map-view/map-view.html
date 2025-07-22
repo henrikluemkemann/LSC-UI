@@ -1,4 +1,9 @@
 <div class="map-container">
+  <div *ngIf="isMapLoading" class="loading-overlay">
+    <i class="pi pi-map loading-icon"></i>
+    <span class="loading-text">Loading map...</span>
+  </div>
+
   <div leaflet [leafletOptions]="options" (leafletMapReady)="onMapReady($event)"></div>
   <p-toast position="top-right"></p-toast>
 </div>
