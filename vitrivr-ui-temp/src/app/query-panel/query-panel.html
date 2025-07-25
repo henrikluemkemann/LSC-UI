@@ -18,7 +18,8 @@
                     [style]="{ width: '380px' }"
                     [inputStyle]="{ fontSize: '0.9rem' }"
                     styleClass="p-calendar-fixed"
-                    (onSelect)="onDateSelect()">
+                    (onSelect)="onDateSelect()"
+                    [disabled]="isCalendarDisabled">
             </p-calendar>
 
             <p-button
@@ -26,7 +27,7 @@
                     label="Apply Time Range"
                     icon="pi pi-check"
                     (onClick)="onApplyTimeFrame()"
-                    [disabled]="!dateRange || !dateRange[1]"
+                    [disabled]="!dateRange || !dateRange[1] || isApplyTimeButtonDisabled"
                     [style]="{ width: '260px' }"
                     styleClass="p-button-sm p-mt-2 p-button-success">
             </p-button>
@@ -44,13 +45,13 @@
 
         <div class="search-tabs p-mb-2">
             <div class="tab-header p-d-flex">
-                <div class="tab-item p-flex-1" [class.active]="activeTab === 'city'" (click)="setActiveTab('city')">
+                <div class="tab-item p-flex-1" [class.active]="activeTab === 'city'" (click)="!isTabsDisabled && setActiveTab('city')" [class.disabled]="isTabsDisabled">
                     <span>City Search</span>
                 </div>
-                <div class="tab-item p-flex-1" [class.active]="activeTab === 'circle'" (click)="setActiveTab('circle')">
+                <div class="tab-item p-flex-1" [class.active]="activeTab === 'circle'" (click)="!isTabsDisabled && setActiveTab('circle')" [class.disabled]="isTabsDisabled">
                     <span>Draw Circle</span>
                 </div>
-                <div class="tab-item p-flex-1" [class.active]="activeTab === 'box'" (click)="setActiveTab('box')">
+                <div class="tab-item p-flex-1" [class.active]="activeTab === 'box'" (click)="!isTabsDisabled && setActiveTab('box')" [class.disabled]="isTabsDisabled">
                     <span>Draw Box</span>
                 </div>
             </div>
@@ -59,7 +60,8 @@
                 <input type="text" pInputText [(ngModel)]="citySearchTerm"
                        (input)="onCitySearchChange()"
                        placeholder="City (e.g., Dublin)"
-                       class="p-inputtext-sm p-w-full" />
+                       class="p-inputtext-sm p-w-full"
+                       [disabled]="isCitySearchDisabled" />
                 <small class="p-text-secondary">Search by city or location name</small>
             </div>
 
@@ -69,7 +71,8 @@
                             [options]="radiusScaleOptions"
                             [ngModel]="selectedRadiusScale"
                             (onOptionClick)="handleScaleOptionClick($event)"
-                            [unselectable]="false">
+                            [unselectable]="false"
+                            [disabled]="isRadiusScaleDisabled">
                     </p-selectButton>
                 </div>
 
@@ -81,7 +84,8 @@
                               [min]="radiusSliderConfig.min"
                               [max]="radiusSliderConfig.max"
                               [step]="radiusSliderConfig.step"
-                              (onChange)="onRadiusChange()">
+                              (onChange)="onRadiusChange()"
+                              [disabled]="isRadiusSliderDisabled">
                     </p-slider>
                 </div>
 
@@ -90,14 +94,14 @@
                               icon="pi pi-circle-fill"
                               styleClass="p-button-secondary p-button-sm"
                               (onClick)="onDrawCircleClick()"
-                              [disabled]="isDrawButtonDisabled">
+                              [disabled]="isDrawButtonDisabled || isTabsDisabled">
                     </p-button>
 
                     <p-button label="Apply Circle"
                               icon="pi pi-check"
                               styleClass="p-button-success p-button-sm"
                               (onClick)="onApplyCircle()"
-                              [disabled]="isApplyCircleButtonDisabled">
+                              [disabled]="isApplyCircleButtonDisabled || isTabsDisabled">
                     </p-button>
                 </div>
 
@@ -110,7 +114,8 @@
                 <p-button label="Draw Box"
                           icon="pi pi-stop"
                           styleClass="p-button-secondary p-button-sm p-mb-2 p-w-12"
-                          (onClick)="onDrawBoxClick()">
+                          (onClick)="onDrawBoxClick()"
+                          [disabled]="isDrawBoxButtonDisabled || isTabsDisabled">
                 </p-button>
 
                 <small class="p-text-secondary d-block p-mt-2">
@@ -123,7 +128,8 @@
     <div class="apply-search-wrapper">
         <p-button label="Apply Search" icon="pi pi-search"
                   (onClick)="onApplySearch()"
-                  styleClass="p-button-success p-button-lg p-w-full"></p-button>
+                  styleClass="p-button-success p-button-lg p-w-full"
+                  [disabled]="isApplySearchButtonDisabled"></p-button>
     </div>
 </p-card>
 

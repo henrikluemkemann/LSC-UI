@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, Output, EventEmitter, Input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CardModule } from 'primeng/card';
 import { SliderModule } from 'primeng/slider';
@@ -44,14 +44,41 @@ import {QueryService, SpatialQuery} from '../services/query.service';
   styleUrls: ['./query-panel.scss'],
   providers: [MessageService]
 })
-export class QueryPanelComponent implements OnInit, OnDestroy {
+export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
+  /**
+   * Input property to receive the current view from the app component.
+   * Used to determine whether to enable or disable interactive components.
+   */
+  @Input() currentView: string = 'map';
+
+  /**
+   * Properties to control the disabled state of all interactive components.
+   * These will be used in the template with the [disabled] attribute.
+   */
+  isCalendarDisabled: boolean = false;
+  isApplyTimeButtonDisabled: boolean = false;
+  isTabsDisabled: boolean = false;
+  isCitySearchDisabled: boolean = false;
+  isRadiusScaleDisabled: boolean = false;
+  isRadiusSliderDisabled: boolean = false;
+  isDrawBoxButtonDisabled: boolean = false;
+  isApplySearchButtonDisabled: boolean = false;
+
+  /**
+   * Stores the state of interactive components when leaving map view.
+   * This allows us to restore the state when returning to map view.
+   */
+  private savedComponentState: {
+    isDrawButtonDisabled: boolean;
+    isApplyCircleButtonDisabled: boolean;
+  } | null = null;
   /**
    * Consumers can subscribe to this emitter
    * to be notified when a query operation completes successfully.
    *
    * @type {EventEmitter<any>}
    */
-  @Output() querySuccess = new EventEmitter<any>();
+  @Output() querySuccess: EventEmitter<any> = new EventEmitter<{results: any; criteria: any}>();
 
   /**
    * EventEmitter instance that emits a boolean value to indicate a change
@@ -147,12 +174,92 @@ export class QueryPanelComponent implements OnInit, OnDestroy {
    * @param queryService Service for constructing and sending Queries
    */
   constructor(
-      private mapDrawingService: MapDrawingService,
-      private messageService: MessageService,
-      private cdr: ChangeDetectorRef,
-      private loggingService: LoggingService,
-      private queryService: QueryService
+    private mapDrawingService: MapDrawingService,
+    private messageService: MessageService,
+    private cdr: ChangeDetectorRef,
+    private loggingService: LoggingService,
+    private queryService: QueryService
   ) {}
+
+  /**
+   * Implements the OnChanges interface to react to changes in the current view.
+   *
+   * @param changes The changes object containing the current and previous values of the input
+   */
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['currentView']) {
+      const currentView = changes['currentView'].currentValue;
+      const previousView = changes['currentView'].previousValue;
+
+      this.loggingService.info('QueryPanelComponent', 'View changed', {
+        previousView,
+        currentView
+      });
+
+      if (currentView === 'map' && previousView && previousView !== 'map') {
+        // Returning to map view, restore the previous state
+        this.restoreComponentState();
+      } else if (currentView !== 'map' && (!previousView || previousView === 'map')) {
+        // Leaving map view, save the current state and disable all components
+        this.saveComponentState();
+        this.disableAllComponents();
+      }
+    }
+  }
+
+  /**
+   * Saves the current state of interactive components before disabling them.
+   * This allows us to restore the state when returning to map view.
+   */
+  private saveComponentState(): void {
+    this.loggingService.info('QueryPanelComponent', 'Saving component state');
+
+    this.savedComponentState = {
+      isDrawButtonDisabled: this.isDrawButtonDisabled,
+      isApplyCircleButtonDisabled: this.isApplyCircleButtonDisabled
+    };
+  }
+
+  /**
+   * Disables all interactive components when not in map view.
+   */
+  private disableAllComponents(): void {
+    this.loggingService.info('QueryPanelComponent', 'Disabling all components');
+
+    this.isCalendarDisabled = true;
+    this.isApplyTimeButtonDisabled = true;
+    this.isTabsDisabled = true;
+    this.isCitySearchDisabled = true;
+    this.isRadiusScaleDisabled = true;
+    this.isRadiusSliderDisabled = true;
+    this.isDrawButtonDisabled = true;
+    this.isApplyCircleButtonDisabled = true;
+    this.isDrawBoxButtonDisabled = true;
+    this.isApplySearchButtonDisabled = true;
+  }
+
+  /**
+   * Restores the previous state of interactive components when returning to map view.
+   */
+  private restoreComponentState(): void {
+    this.loggingService.info('QueryPanelComponent', 'Restoring component state');
+
+    this.isCalendarDisabled = false;
+    this.isApplyTimeButtonDisabled = false;
+    this.isTabsDisabled = false;
+    this.isCitySearchDisabled = false;
+    this.isRadiusScaleDisabled = false;
+    this.isRadiusSliderDisabled = false;
+    this.isDrawBoxButtonDisabled = false;
+    this.isApplySearchButtonDisabled = false;
+
+    // Restore the saved state of the buttons that already had disabled properties
+    if (this.savedComponentState) {
+      this.isDrawButtonDisabled = this.savedComponentState.isDrawButtonDisabled;
+      this.isApplyCircleButtonDisabled = this.savedComponentState.isApplyCircleButtonDisabled;
+      this.savedComponentState = null;
+    }
+  }
 
   /**
    * Angular lifecycle hook that runs when the component is initialized
@@ -164,41 +271,41 @@ export class QueryPanelComponent implements OnInit, OnDestroy {
    */
   ngOnInit() {
     this.subscriptions.push(
-        // Subscribe to circle data changes
-        this.mapDrawingService.circleData$.subscribe(data => {
-          if (data && data.radius > 0) {
-            // Update the selected point and radius
-            this.selectedPoint = data.center;
+      // Subscribe to circle data changes
+      this.mapDrawingService.circleData$.subscribe(data => {
+        if (data && data.radius > 0) {
+          // Update the selected point and radius
+          this.selectedPoint = data.center;
 
-            // Convert radius to the current unit (m or km)
-            if (this.selectedRadiusScale === 'km') {
-              this.circleRadius = data.radius / 1000;
-            } else {
-              this.circleRadius = data.radius;
-            }
-
-            // Enable the Apply Circle button
-            this.isApplyCircleButtonDisabled = false;
-            this.cdr.detectChanges();
+          // Convert radius to the current unit (m or km)
+          if (this.selectedRadiusScale === 'km') {
+            this.circleRadius = data.radius / 1000;
           } else {
-            // Clear the selected point and disable the Apply Circle button
-            this.selectedPoint = null;
-            this.isApplyCircleButtonDisabled = true;
+            this.circleRadius = data.radius;
           }
-        }),
 
-        // Subscribe to drawing mode exit events
-        this.mapDrawingService.exitDrawingMode$.subscribe(() => {
-          this.isDrawButtonDisabled = false;
-          this.isApplyCircleButtonDisabled = true;
-        }),
-
-        // Subscribe to drawing cancellation events
-        this.mapDrawingService.cancelDrawing$.subscribe(() => {
-          this.isDrawButtonDisabled = false;
-          this.isApplyCircleButtonDisabled = true;
+          // Enable the Apply Circle button
+          this.isApplyCircleButtonDisabled = false;
+          this.cdr.detectChanges();
+        } else {
+          // Clear the selected point and disable the Apply Circle button
           this.selectedPoint = null;
-        })
+          this.isApplyCircleButtonDisabled = true;
+        }
+      }),
+
+      // Subscribe to drawing mode exit events
+      this.mapDrawingService.exitDrawingMode$.subscribe(() => {
+        this.isDrawButtonDisabled = false;
+        this.isApplyCircleButtonDisabled = true;
+      }),
+
+      // Subscribe to drawing cancellation events
+      this.mapDrawingService.cancelDrawing$.subscribe(() => {
+        this.isDrawButtonDisabled = false;
+        this.isApplyCircleButtonDisabled = true;
+        this.selectedPoint = null;
+      })
     );
   }
 
@@ -328,7 +435,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy {
 
   /**
    * Handles changes to the city search input
-   *  TODO: placeholder for future implementation
+   * TODO: placeholder for future implementation
    */
   onCitySearchChange() {
     this.loggingService.info('QueryPanelComponent', 'City search term changed', { term: this.citySearchTerm });
@@ -382,8 +489,14 @@ export class QueryPanelComponent implements OnInit, OnDestroy {
       next: (results) => {
         this.loggingService.info('QueryPanelComponent', 'Query successful', results);
 
-        // Emit the results
-        this.querySuccess.emit(results);
+        // Emit both the results and the criteria used for the search
+        this.querySuccess.emit({
+          results,
+          criteria: {
+            timeRange: this.appliedDateRange,
+            spatialQuery: spatialQuery
+          }
+        });
         this.loadingStateChange.emit(false);
       },
       error: (error) => {

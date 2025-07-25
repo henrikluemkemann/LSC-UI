@@ -163,7 +163,7 @@ export class QueryService {
     const hasTimeFilter = timeRange && timeRange.length === 2;
     const hasSpatialFilter = spatialQuery !== null;
 
-    // Define Inputs
+
     if (hasTimeFilter) {
       query.inputs['start_time'] = {
         type: 'DATETIME',

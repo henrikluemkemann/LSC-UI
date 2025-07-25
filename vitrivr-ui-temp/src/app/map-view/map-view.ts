@@ -169,19 +169,19 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
    * @param map The initialized Leaflet map instance
    */
   onMapReady(map: L.Map) {
-    this.loggingService.info('MapViewComponent', 'Map initialized', {
-      center: map.getCenter(),
-      zoom: map.getZoom()
-    });
+    // this.loggingService.info('MapViewComponent', 'Map initialized', {
+    //   center: map.getCenter(),
+    //   zoom: map.getZoom()
+    // });
 
     this.map = map;
     // Load map state twice to avoid weird animation from happening (I didn't find a cleaner fix)
     if (this.initialMapState) {
       this.map?.setView(this.initialMapState.center, this.initialMapState.zoom);
-      this.loggingService.info('MapViewComponent', 'Map view restored 1', {
-        center: this.initialMapState.center,
-        zoom: this.initialMapState.zoom
-      });
+      // this.loggingService.info('MapViewComponent', 'Map view restored 1', {
+      //   center: this.initialMapState.center,
+      //   zoom: this.initialMapState.zoom
+      // });
     }
 
     setTimeout(() => {
@@ -189,10 +189,10 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
       if (this.initialMapState) {
         this.map?.setView(this.initialMapState.center, this.initialMapState.zoom);
-        this.loggingService.info('MapViewComponent', 'Map view restored 2', {
-          center: this.initialMapState.center,
-          zoom: this.initialMapState.zoom
-        });
+        // this.loggingService.info('MapViewComponent', 'Map view restored 2', {
+        //   center: this.initialMapState.center,
+        //   zoom: this.initialMapState.zoom
+        // });
       }
       this.isMapLoading = false;
     }, 500);
@@ -231,7 +231,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       attribution: layer.attribution
     }).addTo(this.map);
 
-    this.loggingService.info('MapViewComponent', 'Tile layer updated', { layerName: layer.name });
+    // this.loggingService.info('MapViewComponent', 'Tile layer updated', { layerName: layer.name });
   }
 
   /**
@@ -249,11 +249,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         circle: this.circleLayer ? { center: this.circleLayer.getLatLng(), radius: this.circleLayer.getRadius() } : null
       };
 
-      this.loggingService.info('MapViewComponent', 'Map state changed', {
-        center: { lat: mapState.center.lat, lng: mapState.center.lng },
-        zoom: mapState.zoom,
-        hasCircle: !!mapState.circle
-      });
+      // this.loggingService.info('MapViewComponent', 'Map state changed', {
+      //   center: { lat: mapState.center.lat, lng: mapState.center.lng },
+      //   zoom: mapState.zoom,
+      //   hasCircle: !!mapState.circle
+      // });
 
       this.mapStateChange.emit(mapState);
     }
@@ -274,7 +274,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   activateCircleDrawingMode() {
     if (!this.map) return;
 
-    this.loggingService.info('MapViewComponent', 'Circle drawing mode activated');
+    // this.loggingService.info('MapViewComponent', 'Circle drawing mode activated');
     this.drawingCircle = true;
 
     // Create an overlay message to guide the user
@@ -295,9 +295,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Set up a click handler to capture the user's selected point
     this.drawClickHandler = (e: L.LeafletMouseEvent) => {
-      this.loggingService.info('MapViewComponent', 'Map clicked for circle placement', {
-        position: { lat: e.latlng.lat, lng: e.latlng.lng }
-      });
+      // this.loggingService.info('MapViewComponent', 'Map clicked for circle placement', {
+      //   position: { lat: e.latlng.lat, lng: e.latlng.lng }
+      // });
       this.mapDrawingService.setCircleData(e.latlng, this.mapDrawingService.latestRadius);
     };
     this.map.on('click', this.drawClickHandler);
@@ -317,7 +317,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   deactivateCircleDrawingMode() {
     if (!this.map || !this.drawingCircle) return;
 
-    this.loggingService.info('MapViewComponent', 'Circle drawing mode deactivated');
+    // this.loggingService.info('MapViewComponent', 'Circle drawing mode deactivated');
     this.drawingCircle = false;
 
     // Remove the click handler
@@ -350,15 +350,15 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // If radius is 0, don't draw a circle (clearing)
     if (radius === 0) {
-      this.loggingService.info('MapViewComponent', 'Circle cleared from map');
+      // this.loggingService.info('MapViewComponent', 'Circle cleared from map');
       this.onMapMove();
       return;
     }
 
-    this.loggingService.info('MapViewComponent', 'Circle updated on map', {
-      center: { lat: center.lat, lng: center.lng },
-      radius: radius
-    });
+    // this.loggingService.info('MapViewComponent', 'Circle updated on map', {
+    //   center: { lat: center.lat, lng: center.lng },
+    //   radius: radius
+    // });
 
     // Create and add the circle to the map
     this.circleLayer = L.circle(center, {
@@ -374,7 +374,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       const circleBounds = this.circleLayer.getBounds();
       const mapBounds = this.map.getBounds();
       if (!mapBounds.contains(circleBounds)) {
-        this.loggingService.info('MapViewComponent', 'Map view adjusted to fit circle');
+        // this.loggingService.info('MapViewComponent', 'Map view adjusted to fit circle');
         this.map.fitBounds(circleBounds);
       }
     }
@@ -391,7 +391,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   clearAllDrawings() {
     if (this.circleLayer && this.map) {
-      this.loggingService.info('MapViewComponent', 'All drawings cleared from map');
+      // this.loggingService.info('MapViewComponent', 'All drawings cleared from map');
       this.map.removeLayer(this.circleLayer);
       this.circleLayer = null;
     }

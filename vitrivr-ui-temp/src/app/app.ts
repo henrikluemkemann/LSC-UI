@@ -6,8 +6,9 @@ import { MapViewComponent, MapState } from './map-view/map-view';
 import { MapDrawingService } from './services/map-drawing.service';
 import { LoggingService } from './services/logging.service';
 import { SettingsPanelComponent } from './setting-panel/setting-panel';
-import {ProgressSpinnerModule} from "primeng/progressspinner";
-import {Button} from "primeng/button";
+import { ProgressSpinnerModule } from "primeng/progressspinner";
+import { Button } from "primeng/button";
+import { GalleryViewComponent } from './gallery-view/gallery-view';
 
 /**
  * Root component of the Vitrivr LSC UI application
@@ -26,7 +27,8 @@ import {Button} from "primeng/button";
     MapViewComponent,
     SettingsPanelComponent,
     ProgressSpinnerModule,
-    Button
+    Button,
+    GalleryViewComponent
   ],
   templateUrl: './app.html',
   styleUrls: ['./app.scss']
@@ -53,6 +55,11 @@ export class AppComponent {
    * Stores the results from a successful query to be displayed in the results view.
    */
   queryResults: any | null = null;
+
+  /**
+   * Stores the criteria of a successful query to be displayed in the gallery view.
+   */
+  queryCriteria: any | null = null;
 
   /**
    * Flag to indicate whether results are currently loading.
@@ -87,7 +94,7 @@ export class AppComponent {
    *
    * This method:
    * 1. Exits drawing mode if it's active to prevent drawing operations
-   *    from continuing when the view changes
+   * from continuing when the view changes
    * 2. Updates the current view to the selected view
    *
    * @param view The new view to display (map or gallery)
@@ -106,26 +113,36 @@ export class AppComponent {
 
   /**
    * Handles successful query event from the QueryPanelComponent.
-   * @param results The results object from the backend API.
+   * @param data The results and criteria object from the query panel.
    */
-  onQueryResults(results: any) {
-    this.queryResults = results;
-    this.currentView = 'results';
+  onQueryResults(data: {results: any; criteria: any}) {
+    this.queryResults = data.results;
+    this.queryCriteria = data.criteria;
+    this.currentView = 'gallery';
   }
 
+  /**
+   * Handles the action of navigating back to the map view.
+   * Updates the current view to 'map', logs the action, and scrolls the window to the top smoothly.
+   */
   onBackToMap(): void {
     this.loggingService.info('AppComponent', 'Back to map clicked');
     this.currentView = 'map';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-
+  /**
+   * Converts the query results into a JSON file and triggers its download.
+   * The file is named "query-results.json" and contains a formatted version
+   * of the data currently held in the `queryResults` object. If no query results
+   * are available, the method does nothing.
+   */
   downloadResultsAsJson(): void {
     if (!this.queryResults) return;
 
     const jsonBlob = new Blob(
-        [JSON.stringify(this.queryResults, null, 2)],
-        { type: 'application/json' }
+      [JSON.stringify(this.queryResults, null, 2)],
+      { type: 'application/json' }
     );
 
     const url = URL.createObjectURL(jsonBlob);
