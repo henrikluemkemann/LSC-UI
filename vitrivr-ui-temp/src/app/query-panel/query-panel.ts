@@ -62,7 +62,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
   isRadiusScaleDisabled: boolean = false;
   isRadiusSliderDisabled: boolean = false;
   isDrawBoxButtonDisabled: boolean = false;
-  isApplySearchButtonDisabled: boolean = false;
+  isApplySearchButtonDisabled: boolean = true;
 
   /**
    * Stores the state of interactive components when leaving map view.
@@ -262,6 +262,31 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   /**
+   * Updates the state of the "Apply Search" button based on user inputs.
+   */
+  private updateApplySearchButtonState(): void {
+    const hasTimeInput = !!this.appliedDateRange;
+    let hasGeoInput = false;
+
+    // Only consider the input from the currently active tab
+    switch (this.activeTab) {
+      case 'city':
+        hasGeoInput = this.citySearchTerm.trim().length > 0;
+        break;
+      case 'circle':
+        //circle is only valid input if it has been applied
+        hasGeoInput = !!this.mapDrawingService.currentCircleData.getValue() && !this.mapDrawingService.isDrawingModeActive();
+        break;
+      case 'box':
+        // TODO: attend when bounding box is implemented :)
+        hasGeoInput = false;
+        break;
+    }
+
+    this.isApplySearchButtonDisabled = !hasTimeInput && !hasGeoInput;
+  }
+
+  /**
    * Angular lifecycle hook that runs when the component is initialized
    *
    * This method sets up subscriptions to the MapDrawingService observables to:
@@ -270,6 +295,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
    * - Reset button states and selected point when drawing is canceled
    */
   ngOnInit() {
+    this.updateApplySearchButtonState();
     this.subscriptions.push(
       // Subscribe to circle data changes
       this.mapDrawingService.circleData$.subscribe(data => {
@@ -291,6 +317,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
           // Clear the selected point and disable the Apply Circle button
           this.selectedPoint = null;
           this.isApplyCircleButtonDisabled = true;
+          this.updateApplySearchButtonState();
         }
       }),
 
@@ -298,6 +325,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
       this.mapDrawingService.exitDrawingMode$.subscribe(() => {
         this.isDrawButtonDisabled = false;
         this.isApplyCircleButtonDisabled = true;
+        this.updateApplySearchButtonState();
       }),
 
       // Subscribe to drawing cancellation events
@@ -305,6 +333,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
         this.isDrawButtonDisabled = false;
         this.isApplyCircleButtonDisabled = true;
         this.selectedPoint = null;
+        this.updateApplySearchButtonState();
       })
     );
   }
@@ -390,6 +419,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
         detail: 'The Time range has been applied successfully.',
         life: 3000
       });
+      this.updateApplySearchButtonState();
     } else {
       this.loggingService.warn('QueryPanelComponent', 'Attempted to apply an invalid time frame.');
     }
@@ -401,6 +431,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
   onDateSelect() {
     this.showApplyTimeButton = true;
     this.appliedDateRange = undefined;
+    this.updateApplySearchButtonState();
     this.loggingService.info('QueryPanelComponent', 'Date range selection changed by user.');
   }
 
@@ -431,6 +462,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
 
     this.showApplyTimeButton = true;
     this.appliedDateRange = undefined;
+    this.updateApplySearchButtonState();
   }
 
   /**
@@ -438,6 +470,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
    * TODO: placeholder for future implementation
    */
   onCitySearchChange() {
+    this.updateApplySearchButtonState();
     this.loggingService.info('QueryPanelComponent', 'City search term changed', { term: this.citySearchTerm });
   }
 
@@ -529,6 +562,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
       newTab: tab
     });
     this.activeTab = tab;
+    this.updateApplySearchButtonState(); // Update Apply Search button state when tab changes
   }
 
   /**
@@ -546,6 +580,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
     this.isDrawButtonDisabled = true;
     this.isApplyCircleButtonDisabled = true; // Stay disabled until map click
     this.activeTab = 'circle';
+    this.isApplySearchButtonDisabled = true;
     this.mapDrawingService.startDrawCircle();
     this.messageService.add({
       severity: 'info',
@@ -567,6 +602,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
       radius: this.circleRadius,
       unit: this.selectedRadiusScale
     });
+    this.updateApplySearchButtonState();
     this.mapDrawingService.exitDrawingMode();
   }
 
@@ -611,6 +647,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
   onDrawBoxClick() {
     this.loggingService.info('QueryPanelComponent', 'Draw Box button clicked');
     this.activeTab = 'box';
+    this.isApplySearchButtonDisabled = true; // Disable Apply Search button when box drawing is started
     this.messageService.add({
       severity: 'info',
       summary: 'Draw Box',

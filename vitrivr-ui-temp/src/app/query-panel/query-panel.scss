@@ -23,6 +23,12 @@
   }
 }
 
+:host ::ng-deep .p-selectbutton .p-button:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+
 :host ::ng-deep {
   .p-calendar-fixed {
     width: 380px !important;
@@ -31,6 +37,9 @@
     .p-inputtext {
       font-size: 0.7rem !important;
       width: 100% !important;
+    }
+    .p-inputtext:enabled:focus {
+      box-shadow: none !important;
     }
 
     .p-inputwrapper {

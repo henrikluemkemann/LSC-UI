@@ -88,6 +88,9 @@ export class HeaderComponent implements OnDestroy {
    */
   onViewChange(event: SelectButtonChangeEvent) {
     const newView = event.value as string | undefined;
+    if (newView === this.selectedView) {
+      return; // Do nothing
+    }
     if (newView) {
       this.selectedView = newView;
       if (newView === 'results') {
