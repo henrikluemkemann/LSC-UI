@@ -1,15 +1,18 @@
 <div class="gallery-container">
-  <div class="gallery-header">
+  <div *ngIf="loading" class="loading-overlay">
+    <i class="pi pi-images loading-icon"></i>
+    <span class="loading-text">Loading images...</span>
+  </div>
+
+  <div class="gallery-header" *ngIf="!loading">
     <div class="criteria-summary">
       <h2>Gallery</h2>
       <p>{{ searchCriteriaSummary }}</p>
     </div>
-    <div *ngIf="!loading && images.length > 0" class="image-count">
+    <div *ngIf="images.length > 0" class="image-count">
       <span>{{ images.length }}</span> images found
     </div>
   </div>
-
-  <p-progressSpinner *ngIf="loading"></p-progressSpinner>
 
   <div *ngIf="!loading && images.length === 0" class="no-results">
     <div class="icon">🖼️</div>
@@ -18,11 +21,21 @@
   </div>
 
   <div *ngIf="!loading && images.length > 0" class="image-grid">
-    <div *ngFor="let image of images" class="image-item">
-      <img [src]="image.url" [alt]="image.error ? 'Failed to load image ' + image.id : 'Image ' + image.id" />
+    <div *ngFor="let image of images" class="image-item" (click)="onImageClick(image)">
+      <img [src]="image.url" [alt]="getAltText(image)" />
       <div class="image-overlay">
         <div class="image-id">ID: {{image.id}}</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="showHighQuality" class="high-quality-viewer" (click)="closeHighQualityView()">
+  <div class="viewer-content" (click)="$event.stopPropagation()">
+    <div class="close-button" (click)="closeHighQualityView()">&times;</div>
+    <img [src]="highQualityImageUrl" alt="High Quality Image" />
+    <div class="viewer-actions">
+      <a [href]="highQualityImageUrl" [download]="'high-quality-' + selectedImageId + '.jpg'" class="download-button">Download Image</a>
     </div>
   </div>
 </div>

@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ImageService } from '../services/image.service';
 import { LoggingService } from '../services/logging.service';
@@ -37,10 +37,16 @@ interface SearchResults {
 export class GalleryViewComponent implements OnChanges, OnDestroy {
   @Input() queryResults: any;
   @Input() queryCriteria: any;
+  @Input() cachedImages: { url: string; id: string; error: boolean }[] | null = null;
+  @Output() imagesLoaded = new EventEmitter<{ url: string; id: string; error: boolean }[]>();
 
   images: { url: string; id: string; error: boolean }[] = [];
   loading = false;
   searchCriteriaSummary: string = '';
+
+  showHighQuality = false;
+  highQualityImageUrl: string | null = null;
+  selectedImageId: string | null = null;
 
   //path to placeholder image for failed loads
   private brokenImageUrl = '/assets/broken-image.png';
@@ -54,14 +60,15 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['queryResults'] && this.queryResults) {
-      this.loggingService.info('GalleryViewComponent', 'Query results changed', {
-        hasResults: !!this.queryResults
-      });
-      this.cleanupImages();
+    if (this.cachedImages) {
+      // If we have cached images, use them and don't load.
+      this.loggingService.info('GalleryViewComponent', `Loading ${this.cachedImages.length} images from cache.`);
+      this.images = this.cachedImages;
+      this.loading = false;
+    } else if (changes['queryResults'] && this.queryResults) {
+      // If there's no cache and new results arrive, load them.
+      this.loggingService.info('GalleryViewComponent', 'Query results changed, loading new images.');
       this.loadImages();
-    } else if (!this.queryResults) {
-      this.cleanupImages();
     }
 
     if (changes['queryCriteria']) {
@@ -70,9 +77,6 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.cleanupImages(); // Ensure cleanup when component is destroyed
-
-    // Clear any active timeout
     if (this.timeoutId !== null) {
       clearTimeout(this.timeoutId);
       this.timeoutId = null;
@@ -122,31 +126,13 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
 
 
   /**
-   * Revokes all created object URLs.
-   */
-  private cleanupImages(): void {
-    this.loggingService.info('GalleryViewComponent', `Cleaning up ${this.images.length} images`);
-
-    this.images.forEach(image => {
-      if (image.url && !image.error) {
-        try {
-          URL.revokeObjectURL(image.url);
-        } catch (error) {
-          this.loggingService.error('GalleryViewComponent', `Error revoking URL for image ${image.id}`, { error });
-        }
-      }
-    });
-
-    this.images = [];
-  }
-
-  /**
    * Loads images based on the query results.
    * If loading gets stuck, abort after 30 seconds.
    */
   private loadImages(): void {
     this.loggingService.info('GalleryViewComponent', 'Starting to load images from query results');
     this.loading = true;
+    this.images = []; // Clear current images before loading new ones
 
     try {
       const retrievableIds = this.extractRetrievableIds(this.queryResults);
@@ -156,22 +142,21 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
       if (retrievableIds.length === 0) {
         this.loggingService.warn('GalleryViewComponent', 'No retrievable IDs found in query results');
         this.loading = false;
+        this.imagesLoaded.emit([]); // Emit empty array if no IDs present
         return;
       }
 
       let processedCount = 0;
-      const startTime = Date.now();
+      const totalToProcess = retrievableIds.length;
 
-      // Set a timeout to check if all images have been processed
+      // Set a timeout to prevent getting stuck
       if (this.timeoutId !== null) clearTimeout(this.timeoutId);
 
       this.timeoutId = window.setTimeout(() => {
-        if (processedCount < retrievableIds.length) {
-          this.loggingService.warn('GalleryViewComponent', 'Image loading timeout reached', {
-            processed: processedCount,
-            total: retrievableIds.length,
-          });
+        if (processedCount < totalToProcess) {
+          this.loggingService.warn('GalleryViewComponent', 'Image loading timeout reached');
           this.loading = false;
+          this.imagesLoaded.emit(this.images); // Emit whatever has been loaded
         }
       }, 30000); // 30 second timeout
 
@@ -184,11 +169,17 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
             } else {
               this.images.push({ url: this.brokenImageUrl, id, error: true });
             }
-            if (++processedCount === retrievableIds.length) this.loading = false;
           },
           error: (err) => {
             this.images.push({ url: this.brokenImageUrl, id, error: true });
-            if (++processedCount === retrievableIds.length) this.loading = false;
+          },
+          complete: () => {
+            processedCount++;
+            if (processedCount === totalToProcess) {
+              this.loading = false;
+              clearTimeout(this.timeoutId as number);
+              this.imagesLoaded.emit(this.images); // Emit all loaded images
+            }
           }
         });
       });
@@ -225,4 +216,56 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
     });
     return [];
   }
+
+  /**
+   * Handles the click event on an image in the gallery. Updates the selected image ID,
+   * retrieves the high-quality version of the image, and prepares it for display.
+   *
+   * @param {Object} image The image object that was clicked.
+   * @param {string} image.id The unique identifier of the clicked image.
+   */
+  onImageClick(image: { id: string }): void {
+    this.loggingService.info('GalleryViewComponent', `Image clicked, attempting to load high-quality for ID: ${image.id}`);
+    this.selectedImageId = image.id;
+    this.imageService.getImage('sandbox', 'original', image.id).subscribe({ // I added a new exporter in the backend
+      next: (blob) => {
+        if (blob) {
+          this.loggingService.info('GalleryViewComponent', `Successfully received blob for high-quality image ${image.id}`);
+          this.highQualityImageUrl = this.imageService.createImageUrl(blob);
+          this.showHighQuality = true;
+        } else {
+          this.loggingService.warn('GalleryViewComponent', `Received null blob for high-quality image ${image.id}`);
+        }
+      },
+      error: (err) => {
+        this.loggingService.error('GalleryViewComponent', `Error fetching high-quality image for ID: ${image.id}`, { error: err });
+      }
+    });
+  }
+
+  /**
+   * Closes the high-quality view of the gallery component by performing necessary cleanup operations.
+   * Resets the `showHighQuality` flag and revokes the object URL for the high-quality image if it exists.
+   */
+  closeHighQualityView(): void {
+    this.loggingService.info('GalleryViewComponent', 'Closing high-quality view');
+    this.showHighQuality = false;
+    if (this.highQualityImageUrl) {
+      URL.revokeObjectURL(this.highQualityImageUrl);
+      this.highQualityImageUrl = null;
+    }
+  }
+
+  /**
+   * Generates the alt text for an image based on its state.
+   * @param image The image object.
+   * @returns The appropriate alt text string.
+   */
+  getAltText(image: { id: string; error: boolean }): string {
+    if (image.error) {
+      return `Failed to load image with ID: ${image.id}`;
+    }
+    return `Image with ID: ${image.id}`;
+  }
+
 }

@@ -68,6 +68,12 @@ export class AppComponent {
   isLoadingResults: boolean = false;
 
   /**
+   * Cache for the gallery images to prevent re-fetching each time when leaving gallery view.
+   */
+  cachedImages: { url: string; id: string; error: boolean }[] | null = null;
+
+
+  /**
    * Handles the change in loading state by updating the `isLoadingResults` property.
    *
    * @param {boolean} isLoading Indicates the new loading state. `true` if loading, `false` otherwise.
@@ -118,7 +124,19 @@ export class AppComponent {
   onQueryResults(data: {results: any; criteria: any}) {
     this.queryResults = data.results;
     this.queryCriteria = data.criteria;
+    this.cachedImages = null;
     this.currentView = 'gallery';
+  }
+
+  /**
+   * Caches the images loaded by the gallery view.
+   * @param images The array of image data to cache.
+   */
+  onImagesLoaded(images: { url: string; id: string; error: boolean }[]): void {
+    setTimeout(() => {
+      this.cachedImages = images;
+      this.loggingService.info('AppComponent', `Cached ${images.length} images.`);
+    });
   }
 
   /**

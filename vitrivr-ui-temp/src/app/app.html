@@ -20,7 +20,9 @@
   <app-gallery-view
     *ngIf="currentView === 'gallery'"
     [queryResults]="queryResults"
-    [queryCriteria]="queryCriteria">
+    [queryCriteria]="queryCriteria"
+    [cachedImages]="cachedImages"
+    (imagesLoaded)="onImagesLoaded($event)">
   </app-gallery-view>
 
   <div *ngIf="currentView === 'results'" class="results-wrapper">
