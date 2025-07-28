@@ -48,10 +48,10 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
   @Input() queryResults: any;
   @Input() queryCriteria: any;
   @Input() cachedImages: ImageModel[] | null = null;
+  @Input() loading = false;
   @Output() imagesLoaded = new EventEmitter<ImageModel[]>();
 
   images: ImageModel[] = [];
-  loading = false;
   searchCriteriaSummary: string = '';
 
   showHighQuality = false;
@@ -70,6 +70,9 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['loading'] && changes['loading'].currentValue) {
+      this.images = [];
+    }
     if (this.cachedImages) {
       // If we have cached images, use them and don't load.
       this.loggingService.info('GalleryViewComponent', `Loading ${this.cachedImages.length} images from cache.`);

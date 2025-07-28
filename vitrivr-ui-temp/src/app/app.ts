@@ -89,6 +89,11 @@ export class AppComponent {
    */
   onLoadingStateChange(isLoading: boolean): void {
     this.isLoadingResults = isLoading;
+    if (isLoading) {
+      this.currentView = 'gallery';
+      this.cachedImages = null;
+      this.queryResults = null;
+    }
   }
 
   /**

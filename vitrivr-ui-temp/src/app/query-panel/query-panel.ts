@@ -481,6 +481,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
    * the appropriate SpatialQuery object to be sent to the QueryService.
    */
   onApplySearch() {
+    this.loadingStateChange.emit(true);
     let spatialQuery: SpatialQuery = null;
 
     switch (this.activeTab) {
@@ -510,6 +511,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
           detail: 'Drawing a bounding box is not yet supported.',
           life: 3000
         });
+        this.loadingStateChange.emit(false);
         return;
     }
 
