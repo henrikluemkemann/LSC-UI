@@ -10,6 +10,15 @@ import { ProgressSpinnerModule } from "primeng/progressspinner";
 import { Button } from "primeng/button";
 import { GalleryViewComponent } from './gallery-view/gallery-view';
 
+interface ImageModel {
+  url: string;
+  id: string;
+  error: boolean;
+  timestamp?: string;
+  location?: { latitude: number; longitude: number };
+  isHovering: boolean;
+}
+
 /**
  * Root component of the Vitrivr LSC UI application
  *
@@ -70,7 +79,7 @@ export class AppComponent {
   /**
    * Cache for the gallery images to prevent re-fetching each time when leaving gallery view.
    */
-  cachedImages: { url: string; id: string; error: boolean }[] | null = null;
+  cachedImages: ImageModel[] | null = null;
 
 
   /**
@@ -132,7 +141,7 @@ export class AppComponent {
    * Caches the images loaded by the gallery view.
    * @param images The array of image data to cache.
    */
-  onImagesLoaded(images: { url: string; id: string; error: boolean }[]): void {
+  onImagesLoaded(images: ImageModel[]): void {
     setTimeout(() => {
       this.cachedImages = images;
       this.loggingService.info('AppComponent', `Cached ${images.length} images.`);

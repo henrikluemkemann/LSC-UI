@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ImageService } from '../services/image.service';
 import { LoggingService } from '../services/logging.service';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import {forkJoin} from 'rxjs';
 
 /**
  * Represents an item in search results that may contain an ID in various formats
@@ -25,6 +26,15 @@ interface SearchResults {
   retrievables?: (string | ResultItem)[];
 }
 
+interface ImageModel {
+  url: string;
+  id: string;
+  error: boolean;
+  timestamp?: string;
+  location?: { latitude: number; longitude: number };
+  isHovering: boolean;
+}
+
 @Component({
   selector: 'app-gallery-view',
   templateUrl: './gallery-view.html',
@@ -37,16 +47,16 @@ interface SearchResults {
 export class GalleryViewComponent implements OnChanges, OnDestroy {
   @Input() queryResults: any;
   @Input() queryCriteria: any;
-  @Input() cachedImages: { url: string; id: string; error: boolean }[] | null = null;
-  @Output() imagesLoaded = new EventEmitter<{ url: string; id: string; error: boolean }[]>();
+  @Input() cachedImages: ImageModel[] | null = null;
+  @Output() imagesLoaded = new EventEmitter<ImageModel[]>();
 
-  images: { url: string; id: string; error: boolean }[] = [];
+  images: ImageModel[] = [];
   loading = false;
   searchCriteriaSummary: string = '';
 
   showHighQuality = false;
   highQualityImageUrl: string | null = null;
-  selectedImageId: string | null = null;
+  selectedImage: ImageModel | null = null;
 
   //path to placeholder image for failed loads
   private brokenImageUrl = '/assets/broken-image.png';
@@ -132,62 +142,71 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
   private loadImages(): void {
     this.loggingService.info('GalleryViewComponent', 'Starting to load images from query results');
     this.loading = true;
-    this.images = []; // Clear current images before loading new ones
+    this.images = []; // Clear current images
 
-    try {
-      const retrievableIds = this.extractRetrievableIds(this.queryResults);
-
-      this.loggingService.info('GalleryViewComponent', `Extracted ${retrievableIds.length} retrievable IDs`);
-
-      if (retrievableIds.length === 0) {
-        this.loggingService.warn('GalleryViewComponent', 'No retrievable IDs found in query results');
-        this.loading = false;
-        this.imagesLoaded.emit([]); // Emit empty array if no IDs present
-        return;
-      }
-
-      let processedCount = 0;
-      const totalToProcess = retrievableIds.length;
-
-      // Set a timeout to prevent getting stuck
-      if (this.timeoutId !== null) clearTimeout(this.timeoutId);
-
-      this.timeoutId = window.setTimeout(() => {
-        if (processedCount < totalToProcess) {
-          this.loggingService.warn('GalleryViewComponent', 'Image loading timeout reached');
-          this.loading = false;
-          this.imagesLoaded.emit(this.images); // Emit whatever has been loaded
-        }
-      }, 30000); // 30 second timeout
-
-      retrievableIds.forEach(id => {
-        this.imageService.getImage('sandbox', 'thumbnail', id).subscribe({
-          next: (blob) => {
-            if (blob) {
-              const url = this.imageService.createImageUrl(blob);
-              this.images.push({ url, id, error: false });
-            } else {
-              this.images.push({ url: this.brokenImageUrl, id, error: true });
-            }
-          },
-          error: (err) => {
-            this.images.push({ url: this.brokenImageUrl, id, error: true });
-          },
-          complete: () => {
-            processedCount++;
-            if (processedCount === totalToProcess) {
-              this.loading = false;
-              clearTimeout(this.timeoutId as number);
-              this.imagesLoaded.emit(this.images); // Emit all loaded images
-            }
-          }
-        });
-      });
-
-    } catch (error) {
-      this.loggingService.error('GalleryViewComponent', 'Error in loadImages method', { error });
+    const retrievableIds = this.extractRetrievableIds(this.queryResults);
+    if (retrievableIds.length === 0) {
+      this.loggingService.warn('GalleryViewComponent', 'No retrievable IDs found in query results');
       this.loading = false;
+      this.imagesLoaded.emit([]);
+      return;
     }
+
+    let processedCount = 0;
+    const totalToProcess = retrievableIds.length;
+
+    // Set a timeout forb entire loading operation
+    if (this.timeoutId !== null) clearTimeout(this.timeoutId);
+    this.timeoutId = window.setTimeout(() => {
+      if (this.loading) {
+        this.loggingService.warn('GalleryViewComponent', 'Image loading timeout reached.');
+        this.loading = false;
+        this.imagesLoaded.emit(this.images); // Emit whatever has been loaded
+      }
+    }, 30000); // 30-second timeout
+
+    retrievableIds.forEach(id => {
+      //forkJoin to fetch the image blob and its metadata in parallel
+      const imageRequest = this.imageService.getImage('sandbox', 'thumbnail', id);
+      const metadataRequest = this.imageService.getMetadata('sandbox', id);
+
+      forkJoin({
+        blob: imageRequest,
+        metadata: metadataRequest
+      }).subscribe({
+        next: ({ blob, metadata }) => {
+          if (blob) {
+            // Both image and metadata were fetched successfully
+            const url = this.imageService.createImageUrl(blob);
+            this.images.push({
+              url,
+              id,
+              error: false,
+              timestamp: metadata.timestamp,
+              location: metadata.coordinates,
+              isHovering: false
+            });
+          } else {
+            // The image blob was null, which is maybe a fetch failure
+            this.images.push({ url: this.brokenImageUrl, id, error: true, isHovering: false });
+          }
+        },
+        error: (err: any) => {
+          this.loggingService.error('GalleryViewComponent', `An unexpected error occurred for ID ${id}`, err);
+          this.images.push({ url: this.brokenImageUrl, id, error: true, isHovering: false });
+        },
+        complete: () => {
+          // This block runs after next() or error()
+          processedCount++;
+          if (processedCount === totalToProcess) {
+            this.loading = false;
+            clearTimeout(this.timeoutId as number);
+            this.imagesLoaded.emit(this.images); // All images processed, emit the final array
+            this.loggingService.info('GalleryViewComponent', 'Finished loading all images and metadata.');
+          }
+        }
+      });
+    });
   }
 
 
@@ -218,15 +237,14 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
   }
 
   /**
-   * Handles the click event on an image in the gallery. Updates the selected image ID,
+   * Handles the click event on an image in the gallery. Updates the selected image,
    * retrieves the high-quality version of the image, and prepares it for display.
    *
-   * @param {Object} image The image object that was clicked.
-   * @param {string} image.id The unique identifier of the clicked image.
+   * @param {ImageModel} image The image object that was clicked.
    */
-  onImageClick(image: { id: string }): void {
+  onImageClick(image: ImageModel): void {
     this.loggingService.info('GalleryViewComponent', `Image clicked, attempting to load high-quality for ID: ${image.id}`);
-    this.selectedImageId = image.id;
+    this.selectedImage = image;
     this.imageService.getImage('sandbox', 'original', image.id).subscribe({ // I added a new exporter in the backend
       next: (blob) => {
         if (blob) {
@@ -254,6 +272,7 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
       URL.revokeObjectURL(this.highQualityImageUrl);
       this.highQualityImageUrl = null;
     }
+    this.selectedImage = null;
   }
 
   /**
@@ -261,11 +280,25 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
    * @param image The image object.
    * @returns The appropriate alt text string.
    */
-  getAltText(image: { id: string; error: boolean }): string {
+  getAltText(image: ImageModel): string {
     if (image.error) {
       return `Failed to load image with ID: ${image.id}`;
     }
     return `Image with ID: ${image.id}`;
+  }
+
+  /**
+   * Formats a timestamp into a readable date and time string.
+   * If the timestamp is undefined, returns 'Unknown date'.
+   *
+   * @param {string | undefined} timestamp - The timestamp to format, or undefined if not provided.
+   * @return {string} The formatted date and time string, or 'Unknown date' if the timestamp is undefined.
+   */
+  formatTimestamp(timestamp: string | undefined): string {
+    if (!timestamp) {
+      return 'Unknown date';
+    }
+    return new Date(timestamp).toLocaleString();
   }
 
 }

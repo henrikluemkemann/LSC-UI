@@ -24,18 +24,35 @@
     <div *ngFor="let image of images" class="image-item" (click)="onImageClick(image)">
       <img [src]="image.url" [alt]="getAltText(image)" />
       <div class="image-overlay">
-        <div class="image-id">ID: {{image.id}}</div>
+        <div class="image-timestamp">{{ formatTimestamp(image.timestamp) }}</div>
       </div>
     </div>
   </div>
 </div>
 
-<div *ngIf="showHighQuality" class="high-quality-viewer" (click)="closeHighQualityView()">
+<div *ngIf="showHighQuality && selectedImage" class="high-quality-viewer" (click)="closeHighQualityView()">
   <div class="viewer-content" (click)="$event.stopPropagation()">
     <div class="close-button" (click)="closeHighQualityView()">&times;</div>
-    <img [src]="highQualityImageUrl" alt="High Quality Image" />
-    <div class="viewer-actions">
-      <a [href]="highQualityImageUrl" [download]="'high-quality-' + selectedImageId + '.jpg'" class="download-button">Download Image</a>
+    <div class="viewer-details">
+      <div class="detail-item">
+        <label>ID</label>
+        <span>{{ selectedImage.id }}</span>
+      </div>
+      <div class="detail-item">
+        <label>Taken on</label>
+        <span>{{ formatTimestamp(selectedImage.timestamp) }}</span>
+      </div>
+      <div class="detail-item">
+        <label>Location</label>
+        <span *ngIf="selectedImage.location">{{ selectedImage.location.latitude }}, {{ selectedImage.location.longitude }}</span>
+        <span *ngIf="!selectedImage.location">Unknown</span>
+      </div>
+    </div>
+    <div class="image-container">
+      <img [src]="highQualityImageUrl" alt="High Quality Image" />
+      <div class="viewer-actions">
+        <a [href]="highQualityImageUrl" [download]="'high-quality-' + selectedImage.id + '.jpg'" class="download-button">Download Image</a>
+      </div>
     </div>
   </div>
 </div>
