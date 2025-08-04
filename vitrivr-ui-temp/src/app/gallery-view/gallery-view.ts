@@ -3,16 +3,18 @@ import { CommonModule } from '@angular/common';
 import { ImageService } from '../services/image.service';
 import { LoggingService } from '../services/logging.service';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
-import {forkJoin} from 'rxjs';
+import { ButtonModule } from 'primeng/button';
+import { TooltipModule } from 'primeng/tooltip';
 
 /**
  * Represents an item in search results that may contain an ID in various formats
  */
 interface ResultItem {
   id?: string;
-  retrievableId?: string;
-  retrievable?: { id: string };
-  document?: { id: string };
+  properties?: {
+    'postgiscoordinates_postgiscoordinates'?: string;
+    'lsctimestamp_minuteIdTimestamp'?: string;
+  }
 }
 
 /**
@@ -20,10 +22,7 @@ interface ResultItem {
  */
 interface SearchResults {
   // Different possible result structures
-  content?: ResultItem[];
-  results?: ResultItem[];
-  items?: ResultItem[];
-  retrievables?: (string | ResultItem)[];
+  retrievables?: ResultItem[];
 }
 
 interface ImageModel {
@@ -35,12 +34,14 @@ interface ImageModel {
   isHovering: boolean;
 }
 
+const IMAGE_DISPLAY_LIMIT = 1000;
+
 @Component({
   selector: 'app-gallery-view',
   templateUrl: './gallery-view.html',
   styleUrls: ['./gallery-view.scss'],
   standalone: true,
-  imports: [CommonModule, ProgressSpinnerModule]
+  imports: [CommonModule, ProgressSpinnerModule, ButtonModule, TooltipModule]
 })
 
 
@@ -53,6 +54,8 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
 
   images: ImageModel[] = [];
   searchCriteriaSummary: string = '';
+  totalResults = 0;
+  displayCount = 0;
 
   showHighQuality = false;
   highQualityImageUrl: string | null = null;
@@ -147,8 +150,15 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
     this.loading = true;
     this.images = []; // Clear current images
 
-    const retrievableIds = this.extractRetrievableIds(this.queryResults);
-    if (retrievableIds.length === 0) {
+    const resultItems = this.extractResultItems(this.queryResults);
+    this.totalResults = resultItems.length;
+
+    // Limit the number of images to be loaded for performance reasons
+    const itemsToLoad = resultItems.slice(0, IMAGE_DISPLAY_LIMIT);
+    this.displayCount = itemsToLoad.length;
+
+
+    if (itemsToLoad.length === 0) {
       this.loggingService.warn('GalleryViewComponent', 'No retrievable IDs found in query results');
       this.loading = false;
       this.imagesLoaded.emit([]);
@@ -156,7 +166,7 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
     }
 
     let processedCount = 0;
-    const totalToProcess = retrievableIds.length;
+    const totalToProcess = itemsToLoad.length;
 
     // Set a timeout forb entire loading operation
     if (this.timeoutId !== null) clearTimeout(this.timeoutId);
@@ -168,22 +178,29 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
       }
     }, 30000); // 30-second timeout
 
-    retrievableIds.forEach(id => {
-      //forkJoin to fetch the image blob and its metadata in parallel
-      const imageRequest = this.imageService.getImage('sandbox', 'thumbnail', id);
-      const metadataRequest = this.imageService.getMetadata('sandbox', id);
+    itemsToLoad.forEach(item => {
+      if (!item.id) {
+        processedCount++;
+        return;
+      }
 
-      forkJoin({
-        blob: imageRequest,
-        metadata: metadataRequest
-      }).subscribe({
-        next: ({ blob, metadata }) => {
+      const imageRequest = this.imageService.getImage('sandbox', 'thumbnail', item.id);
+
+      const metadata = {
+        timestamp: this.parseTimestamp(item.properties?.['lsctimestamp_minuteIdTimestamp']),
+        coordinates: this.parseCoordinates(item.properties?.['postgiscoordinates_postgiscoordinates'])
+      };
+
+      //this.loggingService.info('GalleryViewComponent', `Successfully parsed metadata for ID ${item.id}`, metadata);
+
+      imageRequest.subscribe({
+        next: (blob) => {
           if (blob) {
-            // Both image and metadata were fetched successfully
+            // image was fetched successfully
             const url = this.imageService.createImageUrl(blob);
             this.images.push({
               url,
-              id,
+              id: item.id!,
               error: false,
               timestamp: metadata.timestamp,
               location: metadata.coordinates,
@@ -191,12 +208,12 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
             });
           } else {
             // The image blob was null, which is maybe a fetch failure
-            this.images.push({ url: this.brokenImageUrl, id, error: true, isHovering: false });
+            this.images.push({ url: this.brokenImageUrl, id: item.id!, error: true, isHovering: false });
           }
         },
         error: (err: any) => {
-          this.loggingService.error('GalleryViewComponent', `An unexpected error occurred for ID ${id}`, err);
-          this.images.push({ url: this.brokenImageUrl, id, error: true, isHovering: false });
+          this.loggingService.error('GalleryViewComponent', `An unexpected error occurred for ID ${item.id}`, err);
+          this.images.push({ url: this.brokenImageUrl, id: item.id!, error: true, isHovering: false });
         },
         complete: () => {
           // This block runs after next() or error()
@@ -204,6 +221,7 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
           if (processedCount === totalToProcess) {
             this.loading = false;
             clearTimeout(this.timeoutId as number);
+            this.sortImages('desc'); // Default sort: newest first
             this.imagesLoaded.emit(this.images); // All images processed, emit the final array
             this.loggingService.info('GalleryViewComponent', 'Finished loading all images and metadata.');
           }
@@ -212,32 +230,86 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
     });
   }
 
+  /**
+   * Parses a timestamp string and extracts the value enclosed in the 'DateTime(value=...)' format from the query results.
+   *
+   * @param {string | undefined} timestampStr The timestamp string to parse. This is expected to be in the format 'DateTime(value=...)' or undefined.
+   * @return {string | undefined} The extracted timestamp value as a string if parsing is successful, or undefined if the input is undefined or not in the expected format.
+   */
+  private parseTimestamp(timestampStr: string | undefined): string | undefined {
+    if (!timestampStr) return undefined;
+    const match = timestampStr.match(/DateTime\(value=(.*)\)/);
+    return match ? match[1] : undefined;
+  }
 
   /**
-   * Extracts retrievable IDs from the query results.
+   * Parses a coordinate string and extracts latitude and longitude.
+   *
+   * @param coordStr The coordinate string to be parsed. Expected in a specific hexadecimal format. If undefined, the method returns undefined.
+   * @return An object containing latitude and longitude as numbers if parsing is successful, or undefined if the input is invalid or undefined.
    */
-  private extractRetrievableIds(results: any): string[] {
-    if (!results) return [];
-
-    //different result structures
-    const items = results.content || results.results || results.items || results.retrievables;
-    if (items && Array.isArray(items)) {
-      return items.map((item: any) =>
-        typeof item === 'string' ? item : (item.id || item.retrievableId || (item.retrievable && item.retrievable.id) || (item.document && item.document.id))
-      ).filter((id: any): id is string => !!id);
+  private parseCoordinates(coordStr: string | undefined): { latitude: number; longitude: number } | undefined {
+    if (!coordStr) return undefined;
+    const match = coordStr.match(/0101000020E6100000([0-9A-F]{16})([0-9A-F]{16})/);
+    if (match) {
+      const lonHex = match[1];
+      const latHex = match[2];
+      const lon = this.hexToDouble(lonHex);
+      const lat = this.hexToDouble(latHex);
+      return { latitude: lat, longitude: lon };
     }
-
-    if (Array.isArray(results)) {
-      return results.map((item: any) =>
-        item.id || item.retrievableId || (item.retrievable && item.retrievable.id) || (item.document && item.document.id)
-      ).filter((id: any): id is string => !!id);
-    }
-
-    this.loggingService.error('GalleryViewComponent', 'Could not find retrievable IDs in any known result structure', {
-      availableProperties: Object.keys(results)
-    });
-    return [];
+    return undefined;
   }
+
+  /**
+   * Converts a hexadecimal string representation of a double-precision
+   * floating-point number to its numeric value.
+   *
+   * @param hex The hexadecimal string to be converted. Must represent
+   *            a valid 64-bit floating-point number in little-endian format.
+   * @return The double-precision floating-point number represented by the input hexadecimal string.
+   */
+  private hexToDouble(hex: string): number {
+    const buffer = new ArrayBuffer(8);
+    const dataView = new DataView(buffer);
+    for (let i = 0; i < 8; i++) {
+      dataView.setUint8(i, parseInt(hex.substring(i * 2, i * 2 + 2), 16));
+    }
+    return dataView.getFloat64(0, true); // Little-endian
+  }
+
+
+  /**
+   * Extracts retrievable items from the query results.
+   */
+  private extractResultItems(results: SearchResults | undefined): ResultItem[] {
+    if (!results || !results.retrievables || !Array.isArray(results.retrievables)) {
+      this.loggingService.error('GalleryViewComponent', 'Could not find retrievable items in the expected structure', {
+        availableProperties: results ? Object.keys(results) : 'undefined'
+      });
+      return [];
+    }
+    return results.retrievables;
+  }
+
+  /**
+   * Sorts the images by timestamp.
+   * @param direction The sort direction: 'asc' for ascending, 'desc' for descending.
+   */
+  sortImages(direction: 'asc' | 'desc'): void {
+    this.images.sort((a, b) => {
+      // Push images without a timestamp to the end
+      if (!a.timestamp) return 1;
+      if (!b.timestamp) return -1;
+
+      const dateA = new Date(a.timestamp).getTime();
+      const dateB = new Date(b.timestamp).getTime();
+
+      return direction === 'asc' ? dateA - dateB : dateB - dateA;
+    });
+    this.loggingService.info('GalleryViewComponent', `Images sorted by date ${direction === 'asc' ? 'ascending' : 'descending'}.`);
+  }
+
 
   /**
    * Handles the click event on an image in the gallery. Updates the selected image,

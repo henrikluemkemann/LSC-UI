@@ -6,4 +6,13 @@
 
   <div leaflet [leafletOptions]="options" (leafletMapReady)="onMapReady($event)"></div>
   <p-toast position="top-right"></p-toast>
+
+  <div *ngIf="showHighQualityViewer" class="high-quality-viewer" (click)="closeHighQualityViewer()">
+    <div class="viewer-content" (click)="$event.stopPropagation()">
+      <div class="close-button" (click)="closeHighQualityViewer()">&times;</div>
+      <div class="image-container">
+        <img [src]="highQualityImageUrl" alt="High Quality Image" />
+      </div>
+    </div>
+  </div>
 </div>

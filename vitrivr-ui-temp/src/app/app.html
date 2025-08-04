@@ -14,7 +14,8 @@
   <app-map-view
     *ngIf="currentView === 'map'"
     [initialMapState]="mapState"
-    (mapStateChange)="onMapStateChange($event)">
+    (mapStateChange)="onMapStateChange($event)"
+    [imageLocations]="cachedImages">
   </app-map-view>
 
   <app-gallery-view

@@ -163,6 +163,7 @@ export class QueryService {
     const hasTimeFilter = timeRange && timeRange.length === 2;
     const hasSpatialFilter = spatialQuery !== null;
 
+    let lastOperation = '';
 
     if (hasTimeFilter) {
       query.inputs['start_time'] = {
@@ -192,6 +193,7 @@ export class QueryService {
         inputs: ['time_filter_after', 'time_filter_before'],
         field: 'lsctimestamp'
       };
+      lastOperation = 'time_range_filter';
     }
 
     if (hasSpatialFilter) {
@@ -239,6 +241,7 @@ export class QueryService {
           };
           break;
       }
+      lastOperation = 'spatial_filter';
     }
 
     // Define Output and Aggregation
@@ -248,12 +251,26 @@ export class QueryService {
         aggregatorName: 'IntersectionAggregator',
         inputs: ['spatial_filter', 'time_range_filter']
       };
-      query.output = 'final_intersection';
-    } else if (hasTimeFilter) {
-      query.output = 'time_range_filter';
-    } else if (hasSpatialFilter) {
-      query.output = 'spatial_filter';
+      lastOperation = 'final_intersection';
     }
+
+    // Add metadata lookup transformer
+    query.operations['lookup_metadata'] = {
+      type: 'TRANSFORMER',
+      transformerName: 'MultiFieldLookup',
+      input: lastOperation
+    };
+
+    query.output = 'lookup_metadata';
+
+    query.context = {
+      local: {
+        lookup_metadata: {
+          fields: 'postgiscoordinates,lsctimestamp'
+        }
+      },
+      global: {}
+    };
 
     return query;
   }

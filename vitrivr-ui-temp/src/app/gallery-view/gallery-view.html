@@ -9,8 +9,31 @@
       <h2>Gallery</h2>
       <p>{{ searchCriteriaSummary }}</p>
     </div>
+
+    <div class="gallery-actions">
+      <p-button
+        icon="pi pi-sort-amount-down-alt"
+        styleClass="p-button-secondary p-button-text"
+        (onClick)="sortImages('asc')"
+        pTooltip="Sort oldest first"
+        tooltipPosition="top">
+      </p-button>
+      <p-button
+        icon="pi pi-sort-amount-up-alt"
+        styleClass="p-button-secondary p-button-text"
+        (onClick)="sortImages('desc')"
+        pTooltip="Sort newest first"
+        tooltipPosition="top">
+      </p-button>
+    </div>
+
     <div *ngIf="images.length > 0" class="image-count">
-      <span>{{ images.length }}</span> images found
+      <ng-container *ngIf="totalResults > displayCount; else allShown">
+        Showing <strong>{{ displayCount }}</strong> of <strong>{{ totalResults }}</strong> images
+      </ng-container>
+      <ng-template #allShown>
+        <strong>{{ images.length }}</strong> images found
+      </ng-template>
     </div>
   </div>
 

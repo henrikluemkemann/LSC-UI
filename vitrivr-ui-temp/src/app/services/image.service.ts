@@ -3,17 +3,6 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, catchError, of, tap, map, finalize } from 'rxjs';
 import { LoggingService } from './logging.service';
 
-/**
- * Defines the structure of the metadata object returned by the new backend endpoint.
- */
-export interface SimpleMetadata {
-  timestamp?: string;
-  coordinates?: {
-    latitude: number;
-    longitude: number;
-  };
-}
-
 @Injectable({
   providedIn: 'root'
 })
@@ -103,24 +92,6 @@ export class ImageService {
           this.fetchCounter.success = 0;
           this.fetchCounter.failure = 0;
         }
-      })
-    );
-  }
-
-  /**
-   * This method now calls the metadata endpoint and uses the
-   * SimpleMetadata interface.
-   */
-  getMetadata(schema: string, retrievableId: string): Observable<SimpleMetadata> {
-    const url = `${this.baseUrl}/${schema}/metadata/${retrievableId}`;
-    this.loggingService.info('ImageService', `Fetching metadata from new endpoint: ${url}`);
-    return this.http.get<SimpleMetadata>(url).pipe(
-      catchError(err => {
-        this.loggingService.error('ImageService', `Failed to fetch metadata for ID ${retrievableId}`, {
-          status: err.status,
-          statusText: err.statusText || 'Unknown error'
-        });
-        return of({});
       })
     );
   }

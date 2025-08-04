@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HeaderComponent } from './header/header';
 import { QueryPanelComponent } from './query-panel/query-panel';
@@ -9,6 +9,7 @@ import { SettingsPanelComponent } from './setting-panel/setting-panel';
 import { ProgressSpinnerModule } from "primeng/progressspinner";
 import { Button } from "primeng/button";
 import { GalleryViewComponent } from './gallery-view/gallery-view';
+import { Subscription } from 'rxjs';
 
 interface ImageModel {
   url: string;
@@ -42,7 +43,8 @@ interface ImageModel {
   templateUrl: './app.html',
   styleUrls: ['./app.scss']
 })
-export class AppComponent {
+export class AppComponent implements OnInit, OnDestroy {
+  @ViewChild(GalleryViewComponent) galleryComponent?: GalleryViewComponent;
   /**
    * Tracks the current view mode of the application.
    * Possible values: map or gallery
@@ -81,6 +83,7 @@ export class AppComponent {
    */
   cachedImages: ImageModel[] | null = null;
 
+  private subscriptions: Subscription[] = [];
 
   /**
    * Handles the change in loading state by updating the `isLoadingResults` property.
@@ -107,6 +110,19 @@ export class AppComponent {
     private loggingService: LoggingService
   ) {
     this.loggingService.info('AppComponent', 'Application initialized');
+  }
+
+  /**
+   * Lifecycle hook that is called after the component's view has been initialized.
+   */
+  ngOnInit(): void {
+    this.subscriptions.push(
+      this.mapDrawingService.cancelDrawing$.subscribe(() => {
+        this.cachedImages = null;
+        this.queryResults = null;
+        this.loggingService.info('AppComponent', 'Cleared results and cached images due to drawing cancellation.');
+      })
+    );
   }
 
   /**
@@ -214,5 +230,12 @@ export class AppComponent {
       hasCircle: !!newState.circle
     });
     this.mapState = newState;
+  }
+
+  /**
+   * Lifecycle hook that is called when the component is destroyed.
+   */
+  ngOnDestroy(): void {
+    this.subscriptions.forEach(sub => sub.unsubscribe());
   }
 }
