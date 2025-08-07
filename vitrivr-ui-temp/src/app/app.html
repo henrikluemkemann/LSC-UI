@@ -15,14 +15,13 @@
     *ngIf="currentView === 'map'"
     [initialMapState]="mapState"
     (mapStateChange)="onMapStateChange($event)"
-    [imageLocations]="cachedImages">
+    [queryResults]="queryResults">
   </app-map-view>
 
   <app-gallery-view
     *ngIf="currentView === 'gallery'"
     [queryResults]="queryResults"
     [queryCriteria]="queryCriteria"
-    [cachedImages]="cachedImages"
     (imagesLoaded)="onImagesLoaded($event)"
     [loading]="isLoadingResults">
   </app-gallery-view>

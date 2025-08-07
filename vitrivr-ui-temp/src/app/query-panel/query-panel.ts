@@ -354,13 +354,6 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
     const currentRadius = this.circleRadius;
     let newRadius = currentRadius;
 
-    // Convert the radius value
-    if (previousScale === 'm' && newScale === 'km') {
-      newRadius = currentRadius / 1000;
-    } else if (previousScale === 'km' && newScale === 'm') {
-      newRadius = currentRadius * 1000;
-    }
-
     // Update slider config based on the new unit
     if (newScale === 'm') {
       this.radiusSliderConfig = { min: 10, max: 10000, step: 10 };
@@ -368,7 +361,25 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
       this.radiusSliderConfig = { min: 1, max: 2000, step: 1 };
     }
 
+    // Convert the radius value and constrain to new range
+    if (previousScale === 'm' && newScale === 'km') {
+      newRadius = currentRadius / 1000;
+      // Constrain to km range
+      newRadius = Math.max(this.radiusSliderConfig.min, Math.min(newRadius, this.radiusSliderConfig.max));
+    } else if (previousScale === 'km' && newScale === 'm') {
+      newRadius = currentRadius * 1000;
+      // Constrain to m range
+      newRadius = Math.max(this.radiusSliderConfig.min, Math.min(newRadius, this.radiusSliderConfig.max));
+    }
+
     this.circleRadius = newRadius;
+
+    // Also update the latestRadius in MapDrawingService (in meters)
+    let radiusInMeters = this.circleRadius;
+    if (this.selectedRadiusScale === 'km') {
+      radiusInMeters = this.circleRadius * 1000;
+    }
+    this.mapDrawingService.latestRadius = radiusInMeters;
 
     // Force slider to re-render to apply new config
     this.showSlider = false;
@@ -619,6 +630,15 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
       radius: this.circleRadius,
       unit: this.selectedRadiusScale
     });
+
+    // Convert radius to meters (the standard unit for Leaflet)
+    let radiusInMeters = this.circleRadius;
+    if (this.selectedRadiusScale === 'km') {
+      radiusInMeters = this.circleRadius * 1000;
+    }
+
+    // Update the latestRadius in MapDrawingService immediately
+    this.mapDrawingService.latestRadius = radiusInMeters;
 
     if (this.mapDrawingService.isDrawingModeActive()) {
       this.updateCircle();

@@ -1,10 +1,13 @@
-import { Component, Input, Output, EventEmitter, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, OnDestroy, SimpleChanges, ViewChild, AfterViewInit, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ImageService } from '../services/image.service';
 import { LoggingService } from '../services/logging.service';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { ButtonModule } from 'primeng/button';
 import { TooltipModule } from 'primeng/tooltip';
+import { ScrollingModule, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
+import { fromEvent, Subscription } from 'rxjs';
+import { debounceTime, throttleTime } from 'rxjs/operators';
 
 /**
  * Represents an item in search results that may contain an ID in various formats
@@ -34,25 +37,28 @@ interface ImageModel {
   isHovering: boolean;
 }
 
-const IMAGE_DISPLAY_LIMIT = 1000;
+const IMAGE_DISPLAY_LIMIT = 100000;
+const GRID_COLUMNS = 4;
 
 @Component({
   selector: 'app-gallery-view',
   templateUrl: './gallery-view.html',
   styleUrls: ['./gallery-view.scss'],
   standalone: true,
-  imports: [CommonModule, ProgressSpinnerModule, ButtonModule, TooltipModule]
+  imports: [CommonModule, ProgressSpinnerModule, ButtonModule, TooltipModule, ScrollingModule]
 })
 
 
-export class GalleryViewComponent implements OnChanges, OnDestroy {
+export class GalleryViewComponent implements OnChanges, OnDestroy, AfterViewInit {
+  @ViewChild(CdkVirtualScrollViewport) virtualScroll!: CdkVirtualScrollViewport;
+  @ViewChild('galleryContainer') galleryContainer!: ElementRef;
   @Input() queryResults: any;
   @Input() queryCriteria: any;
-  @Input() cachedImages: ImageModel[] | null = null;
   @Input() loading = false;
   @Output() imagesLoaded = new EventEmitter<ImageModel[]>();
 
   images: ImageModel[] = [];
+  imageRows: ImageModel[][] = [];
   searchCriteriaSummary: string = '';
   totalResults = 0;
   displayCount = 0;
@@ -60,12 +66,17 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
   showHighQuality = false;
   highQualityImageUrl: string | null = null;
   selectedImage: ImageModel | null = null;
+  currentSortDirection: 'asc' | 'desc' = 'desc';
 
   //path to placeholder image for failed loads
   private brokenImageUrl = '/assets/broken-image.png';
 
   // Store timeout ID for cleanup
   private timeoutId: number | null = null;
+  private scrollTimeoutId: number | null = null;
+
+  // Store subscriptions for cleanup
+  private subscriptions: Subscription[] = [];
 
   constructor(
     private imageService: ImageService,
@@ -75,15 +86,13 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['loading'] && changes['loading'].currentValue) {
       this.images = [];
+      this.imageRows = [];
     }
-    if (this.cachedImages) {
-      // If we have cached images, use them and don't load.
-      this.loggingService.info('GalleryViewComponent', `Loading ${this.cachedImages.length} images from cache.`);
-      this.images = this.cachedImages;
-      this.loading = false;
-    } else if (changes['queryResults'] && this.queryResults) {
-      // If there's no cache and new results arrive, load them.
-      this.loggingService.info('GalleryViewComponent', 'Query results changed, loading new images.');
+
+    // Always load images from the backend when query results change
+    // Browser caching should make this efficient by not re-downloading unchanged images
+    if (changes['queryResults'] && this.queryResults) {
+      this.loggingService.info('GalleryViewComponent', 'Query results changed, loading images.');
       this.loadImages();
     }
 
@@ -92,10 +101,51 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
     }
   }
 
+  ngAfterViewInit(): void {
+    // Set up scroll detection once the view is initialized
+    if (this.virtualScroll) {
+      // Add a subscription to detect when scrolling starts
+      this.subscriptions.push(
+        this.virtualScroll.elementScrolled().pipe(
+          throttleTime(100) // Limitfrequency of scroll events
+        ).subscribe(() => {
+          // Remove the no-scroll class during scrolling
+          this.galleryContainer.nativeElement.classList.remove('no-scroll');
+
+          // Clear any existing timeout
+          if (this.scrollTimeoutId !== null) {
+            clearTimeout(this.scrollTimeoutId);
+          }
+
+          // Set a timeout to add the no-scroll class back after scrolling stops
+          this.scrollTimeoutId = window.setTimeout(() => {
+            this.galleryContainer.nativeElement.classList.add('no-scroll');
+            this.scrollTimeoutId = null;
+          }, 200);
+        })
+      );
+    }
+  }
+
   ngOnDestroy(): void {
     if (this.timeoutId !== null) {
       clearTimeout(this.timeoutId);
       this.timeoutId = null;
+    }
+
+    if (this.scrollTimeoutId !== null) {
+      clearTimeout(this.scrollTimeoutId);
+      this.scrollTimeoutId = null;
+    }
+
+    // Unsubscribe from all subscriptions
+    this.subscriptions.forEach(sub => sub.unsubscribe());
+  }
+
+  private chunkImagesIntoRows(images: ImageModel[]): void {
+    this.imageRows = [];
+    for (let i = 0; i < images.length; i += GRID_COLUMNS) {
+      this.imageRows.push(images.slice(i, i + GRID_COLUMNS));
     }
   }
 
@@ -184,49 +234,33 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
         return;
       }
 
-      const imageRequest = this.imageService.getImage('sandbox', 'thumbnail', item.id);
-
       const metadata = {
         timestamp: this.parseTimestamp(item.properties?.['lsctimestamp_minuteIdTimestamp']),
         coordinates: this.parseCoordinates(item.properties?.['postgiscoordinates_postgiscoordinates'])
       };
 
-      //this.loggingService.info('GalleryViewComponent', `Successfully parsed metadata for ID ${item.id}`, metadata);
+      // Get direct URL to the image instead of fetching the blob (thanks Ralph for the tip :) )
+      const url = this.imageService.getImageUrl('sandbox', 'thumbnail', item.id);
 
-      imageRequest.subscribe({
-        next: (blob) => {
-          if (blob) {
-            // image was fetched successfully
-            const url = this.imageService.createImageUrl(blob);
-            this.images.push({
-              url,
-              id: item.id!,
-              error: false,
-              timestamp: metadata.timestamp,
-              location: metadata.coordinates,
-              isHovering: false
-            });
-          } else {
-            // The image blob was null, which is maybe a fetch failure
-            this.images.push({ url: this.brokenImageUrl, id: item.id!, error: true, isHovering: false });
-          }
-        },
-        error: (err: any) => {
-          this.loggingService.error('GalleryViewComponent', `An unexpected error occurred for ID ${item.id}`, err);
-          this.images.push({ url: this.brokenImageUrl, id: item.id!, error: true, isHovering: false });
-        },
-        complete: () => {
-          // This block runs after next() or error()
-          processedCount++;
-          if (processedCount === totalToProcess) {
-            this.loading = false;
-            clearTimeout(this.timeoutId as number);
-            this.sortImages('desc'); // Default sort: newest first
-            this.imagesLoaded.emit(this.images); // All images processed, emit the final array
-            this.loggingService.info('GalleryViewComponent', 'Finished loading all images and metadata.');
-          }
-        }
+      // Add the image to the array with the direct URL
+      this.images.push({
+        url,
+        id: item.id!,
+        error: false,
+        timestamp: metadata.timestamp,
+        location: metadata.coordinates,
+        isHovering: false
       });
+
+      // Update processed count
+      processedCount++;
+      if (processedCount === totalToProcess) {
+        this.loading = false;
+        clearTimeout(this.timeoutId as number);
+        this.sortImages('desc'); // Default sort: newest first
+        this.imagesLoaded.emit(this.images); // All images processed, emit the final array
+        this.loggingService.info('GalleryViewComponent', 'Finished loading all images and metadata.');
+      }
     });
   }
 
@@ -297,56 +331,44 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
    * @param direction The sort direction: 'asc' for ascending, 'desc' for descending.
    */
   sortImages(direction: 'asc' | 'desc'): void {
+    this.currentSortDirection = direction;
     this.images.sort((a, b) => {
       // Push images without a timestamp to the end
       if (!a.timestamp) return 1;
       if (!b.timestamp) return -1;
-
       const dateA = new Date(a.timestamp).getTime();
       const dateB = new Date(b.timestamp).getTime();
-
       return direction === 'asc' ? dateA - dateB : dateB - dateA;
     });
+    this.chunkImagesIntoRows(this.images); // Re-chunk the sorted images
     this.loggingService.info('GalleryViewComponent', `Images sorted by date ${direction === 'asc' ? 'ascending' : 'descending'}.`);
   }
 
 
   /**
    * Handles the click event on an image in the gallery. Updates the selected image,
-   * retrieves the high-quality version of the image, and prepares it for display.
+   * gets the direct URL to the high-quality version of the image, and prepares it for display.
    *
    * @param {ImageModel} image The image object that was clicked.
    */
   onImageClick(image: ImageModel): void {
-    this.loggingService.info('GalleryViewComponent', `Image clicked, attempting to load high-quality for ID: ${image.id}`);
+    this.loggingService.info('GalleryViewComponent', `Image clicked, preparing high-quality view for ID: ${image.id}`);
     this.selectedImage = image;
-    this.imageService.getImage('sandbox', 'original', image.id).subscribe({ // I added a new exporter in the backend
-      next: (blob) => {
-        if (blob) {
-          this.loggingService.info('GalleryViewComponent', `Successfully received blob for high-quality image ${image.id}`);
-          this.highQualityImageUrl = this.imageService.createImageUrl(blob);
-          this.showHighQuality = true;
-        } else {
-          this.loggingService.warn('GalleryViewComponent', `Received null blob for high-quality image ${image.id}`);
-        }
-      },
-      error: (err) => {
-        this.loggingService.error('GalleryViewComponent', `Error fetching high-quality image for ID: ${image.id}`, { error: err });
-      }
-    });
+
+    // Get direct URL to the high-quality image
+    this.highQualityImageUrl = this.imageService.getImageUrl('sandbox', 'original', image.id);
+    this.showHighQuality = true;
+    this.loggingService.info('GalleryViewComponent', `Set high-quality image URL for ${image.id}`);
   }
 
   /**
    * Closes the high-quality view of the gallery component by performing necessary cleanup operations.
-   * Resets the `showHighQuality` flag and revokes the object URL for the high-quality image if it exists.
+   * Resets the `showHighQuality` flag and clears the high-quality image URL.
    */
   closeHighQualityView(): void {
     this.loggingService.info('GalleryViewComponent', 'Closing high-quality view');
     this.showHighQuality = false;
-    if (this.highQualityImageUrl) {
-      URL.revokeObjectURL(this.highQualityImageUrl);
-      this.highQualityImageUrl = null;
-    }
+    this.highQualityImageUrl = null;
     this.selectedImage = null;
   }
 
@@ -376,4 +398,27 @@ export class GalleryViewComponent implements OnChanges, OnDestroy {
     return new Date(timestamp).toLocaleString();
   }
 
+  /**
+   * Track function for the virtual scroll to optimize rendering performance.
+   * This helps Angular identify which rows have changed and only re-render those.
+   *
+   * @param index The index of the row in the imageRows array
+   * @param row The row of images
+   * @returns The index as a unique identifier for the row
+   */
+  trackByRowIndex(index: number, row: ImageModel[]): number {
+    return index;
+  }
+
+  /**
+   * Track function for the images within a row to optimize rendering performance.
+   * This helps Angular identify which images have changed and only re-render those.
+   *
+   * @param index The index of the image in the row
+   * @param image The image model
+   * @returns The image ID as a unique identifier for the image
+   */
+  trackByImageId(index: number, image: ImageModel): string {
+    return image.id;
+  }
 }

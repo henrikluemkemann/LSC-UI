@@ -10,6 +10,7 @@ import { ProgressSpinnerModule } from "primeng/progressspinner";
 import { Button } from "primeng/button";
 import { GalleryViewComponent } from './gallery-view/gallery-view';
 import { Subscription } from 'rxjs';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 
 interface ImageModel {
   url: string;
@@ -38,7 +39,8 @@ interface ImageModel {
     SettingsPanelComponent,
     ProgressSpinnerModule,
     Button,
-    GalleryViewComponent
+    GalleryViewComponent,
+    ScrollingModule
   ],
   templateUrl: './app.html',
   styleUrls: ['./app.scss']
@@ -78,10 +80,6 @@ export class AppComponent implements OnInit, OnDestroy {
    */
   isLoadingResults: boolean = false;
 
-  /**
-   * Cache for the gallery images to prevent re-fetching each time when leaving gallery view.
-   */
-  cachedImages: ImageModel[] | null = null;
 
   private subscriptions: Subscription[] = [];
 
@@ -94,7 +92,6 @@ export class AppComponent implements OnInit, OnDestroy {
     this.isLoadingResults = isLoading;
     if (isLoading) {
       this.currentView = 'gallery';
-      this.cachedImages = null;
       this.queryResults = null;
     }
   }
@@ -118,9 +115,8 @@ export class AppComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.subscriptions.push(
       this.mapDrawingService.cancelDrawing$.subscribe(() => {
-        this.cachedImages = null;
         this.queryResults = null;
-        this.loggingService.info('AppComponent', 'Cleared results and cached images due to drawing cancellation.');
+        this.loggingService.info('AppComponent', 'Cleared results due to drawing cancellation.');
       })
     );
   }
@@ -154,19 +150,12 @@ export class AppComponent implements OnInit, OnDestroy {
   onQueryResults(data: {results: any; criteria: any}) {
     this.queryResults = data.results;
     this.queryCriteria = data.criteria;
-    this.cachedImages = null;
     this.currentView = 'gallery';
   }
 
-  /**
-   * Caches the images loaded by the gallery view.
-   * @param images The array of image data to cache.
-   */
+
   onImagesLoaded(images: ImageModel[]): void {
-    setTimeout(() => {
-      this.cachedImages = images;
-      this.loggingService.info('AppComponent', `Cached ${images.length} images.`);
-    });
+    this.loggingService.info('AppComponent', `Gallery loaded ${images.length} images.`);
   }
 
   /**
@@ -224,11 +213,7 @@ export class AppComponent implements OnInit, OnDestroy {
    * @param newState The new map state to store
    */
   onMapStateChange(newState: MapState) {
-    this.loggingService.info('AppComponent', 'Map state updated', {
-      center: { lat: newState.center.lat, lng: newState.center.lng },
-      zoom: newState.zoom,
-      hasCircle: !!newState.circle
-    });
+    //this.loggingService.info('AppComponent', 'Map state updated', {center: { lat: newState.center.lat, lng: newState.center.lng },zoom: newState.zoom,hasCircle: !!newState.circle});
     this.mapState = newState;
   }
 

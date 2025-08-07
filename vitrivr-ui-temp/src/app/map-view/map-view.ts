@@ -88,10 +88,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
    */
   @Input() initialMapState: MapState | null = null;
 
+
   /**
-   * An array of image data with locations to be marked on the map.
+   * The query results containing image data to display on the map.
+   * This is used to extract image locations directly.
    */
-  @Input() imageLocations: ImageModel[] | null = null;
+  @Input() queryResults: any;
 
   /**
    * Event emitter for map state changes
@@ -128,7 +130,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     layers: [],
     zoom: 10,
     maxZoom: 18,
-    center: L.latLng(53.3498, -6.2603) // Dublin coordinates for now since LSC dataset has many images there
+    center: L.latLng(53.3498, -6.2603), // Dublin coordinates for now since LSC dataset has many images there
+    zoomAnimation: true
   };
 
   private tileLayer: L.TileLayer | null = null;
@@ -213,7 +216,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
    * @param changes Object containing the changed properties.
    */
   ngOnChanges(changes: SimpleChanges) {
-    if (changes['imageLocations'] && this.map) {
+    // Check if we have a map and queryResults has changed
+    if (this.map && changes['queryResults']) {
       this.updateMarkers();
     }
   }
@@ -284,17 +288,21 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
   }
 
   /**
-   * Updates the markers on the map based on the `imageLocations` input.
+   * Updates the markers on the map based on image data extracted from the `queryResults` input.
    */
   private updateMarkers(): void {
     if (!this.map) return;
 
     this.markersLayer.clearLayers();
 
-    if (this.imageLocations) {
-      this.loggingService.info('MapViewComponent', `Updating markers for ${this.imageLocations.length} results.`);
+    // Extract images from queryResults
+    const images = this.extractImagesFromQueryResults();
+
+    if (images && images.length > 0) {
+      this.loggingService.info('MapViewComponent', `Updating markers for ${images.length} results.`);
       const markersToAdd: L.Marker[] = [];
-      this.imageLocations.forEach(image => {
+
+      images.forEach(image => {
         if (image.location && image.location.latitude && image.location.longitude) {
           const marker = L.marker([image.location.latitude, image.location.longitude], { icon: this.cssMarker });
 
@@ -329,20 +337,109 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     }
   }
 
-  private openHighQualityViewer(image: ImageModel): void {
-    this.imageService.getImage('sandbox', 'original', image.id).subscribe(blob => {
-      if (blob) {
-        this.highQualityImageUrl = this.imageService.createImageUrl(blob);
-        this.showHighQualityViewer = true;
-        this.cdr.detectChanges();
+  /**
+   * Extracts image data from query results and converts it to ImageModel objects.
+   * @returns An array of ImageModel objects with location data.
+   */
+  private extractImagesFromQueryResults(): ImageModel[] {
+    if (!this.queryResults) return [];
+
+    const resultItems = this.extractResultItems(this.queryResults);
+    const images: ImageModel[] = [];
+
+    resultItems.forEach(item => {
+      if (!item.id) return;
+
+      const metadata = {
+        timestamp: this.parseTimestamp(item.properties?.['lsctimestamp_minuteIdTimestamp']),
+        coordinates: this.parseCoordinates(item.properties?.['postgiscoordinates_postgiscoordinates'])
+      };
+
+      // Only add images that have location data
+      if (metadata.coordinates) {
+        const url = this.imageService.getImageUrl('sandbox', 'thumbnail', item.id);
+
+        images.push({
+          url,
+          id: item.id,
+          error: false,
+          timestamp: metadata.timestamp,
+          location: metadata.coordinates,
+          isHovering: false
+        });
       }
     });
+
+    return images;
   }
 
-  closeHighQualityViewer(): void {
-    if (this.highQualityImageUrl) {
-      URL.revokeObjectURL(this.highQualityImageUrl);
+  /**
+   * Extracts retrievable items from the query results.
+   */
+  private extractResultItems(results: any): any[] {
+    if (!results || !results.retrievables || !Array.isArray(results.retrievables)) {
+      this.loggingService.error('MapViewComponent', 'Could not find retrievable items in the expected structure', {
+        availableProperties: results ? Object.keys(results) : 'undefined'
+      });
+      return [];
     }
+    return results.retrievables;
+  }
+
+  /**
+   * Parses a timestamp string and extracts the value enclosed in the 'DateTime(value=...)' format.
+   */
+  private parseTimestamp(timestampStr: string | undefined): string | undefined {
+    if (!timestampStr) return undefined;
+    const match = timestampStr.match(/DateTime\(value=(.*)\)/);
+    return match ? match[1] : undefined;
+  }
+
+  /**
+   * Parses a coordinate string and extracts latitude and longitude.
+   */
+  private parseCoordinates(coordStr: string | undefined): { latitude: number; longitude: number } | undefined {
+    if (!coordStr) return undefined;
+    const match = coordStr.match(/0101000020E6100000([0-9A-F]{16})([0-9A-F]{16})/);
+    if (match) {
+      const lonHex = match[1];
+      const latHex = match[2];
+      const lon = this.hexToDouble(lonHex);
+      const lat = this.hexToDouble(latHex);
+      return { latitude: lat, longitude: lon };
+    }
+    return undefined;
+  }
+
+  /**
+   * Converts a hexadecimal string representation of a double-precision
+   * floating-point number to its numeric value.
+   */
+  private hexToDouble(hex: string): number {
+    const buffer = new ArrayBuffer(8);
+    const dataView = new DataView(buffer);
+    for (let i = 0; i < 8; i++) {
+      dataView.setUint8(i, parseInt(hex.substring(i * 2, i * 2 + 2), 16));
+    }
+    return dataView.getFloat64(0, true); // Little-endian
+  }
+
+  /**
+   * Opens the high-quality image viewer with the specified image.
+   *
+   * @param {ImageModel} image The image model containing the data for the image to be viewed.
+   */
+  private openHighQualityViewer(image: ImageModel): void {
+    // Get direct URL to the high-quality image
+    this.highQualityImageUrl = this.imageService.getImageUrl('sandbox', 'original', image.id);
+    this.showHighQualityViewer = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Updates the high-quality image URL to null and hides the viewer.
+   */
+  closeHighQualityViewer(): void {
     this.highQualityImageUrl = null;
     this.showHighQualityViewer = false;
     this.cdr.detectChanges();
