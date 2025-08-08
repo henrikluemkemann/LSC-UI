@@ -226,18 +226,56 @@ export class QueryService {
 
         case 'bbox':
           const { northEast, southWest } = spatialQuery.data;
-          query.inputs['bounding_box'] = {
-            type: 'GEOGRAPHY_POLYGON',
-            data: `POLYGON((${southWest.lng} ${southWest.lat}, ${northEast.lng} ${southWest.lat}, ${northEast.lng} ${northEast.lat}, ${southWest.lng} ${northEast.lat}, ${southWest.lng} ${southWest.lat}))`
+
+          //numeric inputs for bounds with standard comparisons
+          query.inputs['south_lat'] = {
+            type: 'NUMERIC',
+            data: southWest.lat,
+            comparison: '>='
+          };
+          query.inputs['north_lat'] = {
+            type: 'NUMERIC',
+            data: northEast.lat,
+            comparison: '<='
+          };
+          query.inputs['west_lon'] = {
+            type: 'NUMERIC',
+            data: southWest.lng,
+            comparison: '>='
+          };
+          query.inputs['east_lon'] = {
+            type: 'NUMERIC',
+            data: northEast.lng,
+            comparison: '<='
           };
 
-          query.operations['spatial_filter'] = {
+          // Create retrievers for each bound
+          query.operations['lat_after_south'] = {
             type: 'RETRIEVER',
-            input: 'bounding_box',
-            field: 'coordinates',
-            parameters: {
-              operator: 'INTERSECTS'
-            }
+            input: 'south_lat',
+            field: 'coordinates.lat'
+          };
+          query.operations['lat_before_north'] = {
+            type: 'RETRIEVER',
+            input: 'north_lat',
+            field: 'coordinates.lat'
+          };
+          query.operations['lon_after_west'] = {
+            type: 'RETRIEVER',
+            input: 'west_lon',
+            field: 'coordinates.lon'
+          };
+          query.operations['lon_before_east'] = {
+            type: 'RETRIEVER',
+            input: 'east_lon',
+            field: 'coordinates.lon'
+          };
+
+          // Combine all four with AND as the spatial filter
+          query.operations['spatial_filter'] = {
+            type: 'BOOLEAN_AND',
+            inputs: ['lat_after_south', 'lat_before_north', 'lon_after_west', 'lon_before_east'],
+            field: 'coordinates'
           };
           break;
       }

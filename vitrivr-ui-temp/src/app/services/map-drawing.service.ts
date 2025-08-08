@@ -21,11 +21,23 @@ export class MapDrawingService {
    */
   private drawCircleSubject = new Subject<void>();
 
+
+  /**
+   * Subject that emits when box drawing mode should be activated
+   */
+  private drawBoxSubject = new Subject<void>();
+
   /**
    * Subject that emits circle data (center point and radius)
    * Used to update the circle visualization on the map
    */
   private circleDataSubject = new Subject<{center: L.LatLng, radius: number}>();
+
+  /**
+   * Subject that emits bounding box data (northeast and southwest corners)
+   * Used to update the rectangle visualization on the map
+   */
+  private boxDataSubject = new Subject<{northEast: L.LatLng, southWest: L.LatLng}>();
 
   /**
    * Subject that emits when drawing mode should be exited
@@ -88,6 +100,26 @@ export class MapDrawingService {
   currentCircleData$ = this.currentCircleData.asObservable();
 
   /**
+   * BehaviorSubject that holds the latest bounding box data
+   */
+  currentBoxData = new BehaviorSubject<{northEast: L.LatLng, southWest: L.LatLng} | null>(null);
+
+  /**
+   * Observable for box drawing mode activation
+   */
+  drawBox$ = this.drawBoxSubject.asObservable();
+
+  /**
+   * Observable for box data updates
+   */
+  boxData$ = this.boxDataSubject.asObservable();
+
+  /**
+   * Observable for the current box data
+   */
+  currentBoxData$ = this.currentBoxData.asObservable();
+
+  /**
    * Stores the most recently used radius value in meters
    * Used to remember the user's preferred radius when drawing new circles
    */
@@ -135,12 +167,55 @@ export class MapDrawingService {
         radius: radius
       });
       this.latestRadius = radius;
+      //storing a circle clears any stored box
+      this.currentBoxData.next(null);
       this.currentCircleData.next({ center, radius });
     } else {
       this.loggingService.info('MapDrawingService', 'Circle cleared');
       this.currentCircleData.next(null); // Clear the circle
     }
     this.circleDataSubject.next({center, radius});
+  }
+
+  /**
+   * Activates bounding box drawing mode
+   */
+  startDrawBox(): void {
+    this.loggingService.info('MapDrawingService', 'Bounding box drawing mode activated');
+    this.drawingModeActiveSubject.next(true);
+    this.drawBoxSubject.next();
+  }
+
+  /**
+   * Updates the bounding box data given two opposite corners.
+   * The corners are normalized to northEast (max lat/lng) and southWest (min lat/lng).
+   */
+  setBoxData(cornerA: L.LatLng, cornerB: L.LatLng): void {
+    const north = Math.max(cornerA.lat, cornerB.lat);
+    const south = Math.min(cornerA.lat, cornerB.lat);
+    const east = Math.max(cornerA.lng, cornerB.lng);
+    const west = Math.min(cornerA.lng, cornerB.lng);
+
+    const northEast = new L.LatLng(north, east);
+    const southWest = new L.LatLng(south, west);
+
+    this.loggingService.info('MapDrawingService', 'Bounding box data updated', {
+      northEast: { lat: northEast.lat, lng: northEast.lng },
+      southWest: { lat: southWest.lat, lng: southWest.lng }
+    });
+
+    //storing a box clears any stored circle
+    this.currentCircleData.next(null);
+    this.currentBoxData.next({ northEast, southWest });
+    this.boxDataSubject.next({ northEast, southWest });
+  }
+
+  /**
+   * Clears the current bounding box data
+   */
+  clearBox(): void {
+    this.loggingService.info('MapDrawingService', 'Bounding box cleared');
+    this.currentBoxData.next(null);
   }
 
   /**
@@ -174,6 +249,7 @@ export class MapDrawingService {
     this.loggingService.info('MapDrawingService', 'Drawing canceled');
     this.drawingModeActiveSubject.next(false);
     this.setCircleData(new L.LatLng(0,0), 0); // Clear the circle
+    this.clearBox(); // Clear the bounding box
     this.cancelDrawingSubject.next();
   }
 

@@ -59,16 +59,50 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
   @Input() currentView: string = 'map';
 
   /**
-   * Properties to control the disabled state of all interactive components.
-   * These will be used in the template with the [disabled] attribute.
+   * Controls whether the date range calendar is disabled
    */
   isCalendarDisabled: boolean = false;
+
+  /**
+   * Controls whether the "Apply Time Range" button is disabled
+   */
   isApplyTimeButtonDisabled: boolean = false;
+
+  /**
+   * Controls whether the geographical search tabs are disabled
+   */
   isTabsDisabled: boolean = false;
+
+  /**
+   * Controls whether the city search input and button are disabled
+   */
   isCitySearchDisabled: boolean = false;
+
+  /**
+   * Controls whether the radius scale selection buttons are disabled
+   */
   isRadiusScaleDisabled: boolean = false;
+
+  /**
+   * Controls whether the radius adjustment slider is disabled
+   */
   isRadiusSliderDisabled: boolean = false;
+
+  /**
+   * Controls whether the "Draw Box" button is disabled
+   */
   isDrawBoxButtonDisabled: boolean = false;
+
+  /**
+   * Controls whether the "Apply Box" button is disabled
+   * Defaults to true since a box must be drawn before it can be applied
+   */
+  isApplyBoxButtonDisabled: boolean = true;
+
+  /**
+   * Controls whether the main "Apply Search" button is disabled
+   * Defaults to true since search criteria must be set before search can be applied
+   */
   isApplySearchButtonDisabled: boolean = true;
 
   /**
@@ -203,6 +237,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
    * @param cdr Angular's ChangeDetectorRef for manually triggering change detection
    * @param loggingService Service for logging status changes
    * @param queryService Service for constructing and sending Queries
+   * @param geocodingService Service for geocoding and reverse geocoding
    */
   constructor(
     private mapDrawingService: MapDrawingService,
@@ -310,8 +345,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
         hasGeoInput = !!this.mapDrawingService.currentCircleData.getValue() && !this.mapDrawingService.isDrawingModeActive();
         break;
       case 'box':
-        // TODO: attend when bounding box is implemented :)
-        hasGeoInput = false;
+        hasGeoInput = !!this.mapDrawingService.currentBoxData.getValue() && !this.mapDrawingService.isDrawingModeActive();
         break;
     }
 
@@ -322,9 +356,11 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
    * Angular lifecycle hook that runs when the component is initialized
    *
    * This method sets up subscriptions to the MapDrawingService observables to:
-   * - Update the circle radius and selected point when circle data changes
-   * - Reset button states when drawing mode is exited
-   * - Reset button states and selected point when drawing is canceled
+   * - Update the selected point and circle radius when circle data changes, enabling or disabling
+   *   the Apply Circle button accordingly
+   * - Enable or disable the Apply Box button when box data changes
+   * - Reset all drawing-related button states when drawing mode is exited
+   * - Reset all drawing-related button states and clear the selected point when drawing is canceled
    */
   ngOnInit() {
     this.updateApplySearchButtonState();
@@ -353,10 +389,23 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
         }
       }),
 
+      // Subscribe to box data changes
+      this.mapDrawingService.boxData$.subscribe(data => {
+        if (data) {
+          this.isApplyBoxButtonDisabled = false;
+          this.cdr.detectChanges();
+        } else {
+          this.isApplyBoxButtonDisabled = true;
+          this.updateApplySearchButtonState();
+        }
+      }),
+
       // Subscribe to drawing mode exit events
       this.mapDrawingService.exitDrawingMode$.subscribe(() => {
         this.isDrawButtonDisabled = false;
         this.isApplyCircleButtonDisabled = true;
+        this.isDrawBoxButtonDisabled = false;
+        this.isApplyBoxButtonDisabled = true;
         this.updateApplySearchButtonState();
       }),
 
@@ -364,6 +413,8 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
       this.mapDrawingService.cancelDrawing$.subscribe(() => {
         this.isDrawButtonDisabled = false;
         this.isApplyCircleButtonDisabled = true;
+        this.isDrawBoxButtonDisabled = false;
+        this.isApplyBoxButtonDisabled = true;
         this.selectedPoint = null;
         this.updateApplySearchButtonState();
       })
@@ -630,6 +681,15 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
     this.updateApplySearchButtonState();
   }
 
+  /**
+   * Updates the circle on the map based on the selected city and radius
+   *
+   * This method:
+   * 1. Checks if a city has been selected
+   * 2. Creates a LatLng object from the city's coordinates
+   * 3. Sends the city location and radius to the MapDrawingService
+   *    to update the circle visualization on the map
+   */
   private updateCityCircleOnMap() {
     if (this.selectedCity) {
       const cityLocation = new L.LatLng(this.selectedCity.latitude, this.selectedCity.longitude);
@@ -674,17 +734,11 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
         break;
 
       case 'box':
-        // TODO: Implement bounding box drawing and data capture.
-        // For now, this case will do nothing.
-        this.loggingService.warn('QueryPanelComponent', 'Bounding box search is not yet implemented.');
-        this.messageService.add({
-          severity: 'warn',
-          summary: 'Not Implemented',
-          detail: 'Drawing a bounding box is not yet supported.',
-          life: 3000
-        });
-        this.loadingStateChange.emit(false);
-        return;
+        const currentBoxData = this.mapDrawingService.currentBoxData.getValue();
+        if (currentBoxData) {
+          spatialQuery = { type: 'bbox', data: currentBoxData };
+        }
+        break;
     }
 
     this.loggingService.info('QueryPanelComponent', 'Search applied', {
@@ -863,19 +917,31 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
    *
    * This method:
    * 1. Activates the box tab
-   * 2. Displays a toast message informing the user that the feature is not yet implemented
-   * TODO: implement box drawing
+   * 2. Starts the box drawing mode via the MapDrawingService
+   * 3. Updates the UI state to guide the user
    */
   onDrawBoxClick() {
     this.loggingService.info('QueryPanelComponent', 'Draw Box button clicked');
     this.activeTab = 'box';
-    this.isApplySearchButtonDisabled = true; // Disable Apply Search button when box drawing is started
+    this.isDrawBoxButtonDisabled = true;
+    this.isApplyBoxButtonDisabled = true; // enable after first box defined
+    this.isApplySearchButtonDisabled = true;
+    this.mapDrawingService.startDrawBox();
     this.messageService.add({
       severity: 'info',
       summary: 'Draw Box',
-      detail: 'This feature is not yet implemented.',
+      detail: 'Click first corner, then second. Click "Apply Box" when finished.',
       life: 5000
     });
+  }
+
+  /**
+   * Finalizes the box selection and exits drawing mode
+   */
+  onApplyBoxClick() {
+    this.loggingService.info('QueryPanelComponent', 'Apply Box button clicked');
+    this.mapDrawingService.exitDrawingMode();
+    this.updateApplySearchButtonState();
   }
 
   /**

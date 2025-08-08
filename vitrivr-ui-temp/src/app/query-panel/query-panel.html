@@ -134,14 +134,22 @@
       </div>
 
       <div class="tab-content p-mt-2" *ngIf="activeTab === 'box'">
-        <p-button label="Draw Box"
-                  icon="pi pi-stop"
-                  styleClass="p-button-secondary p-button-sm p-mb-2 p-w-12"
-                  (onClick)="onDrawBoxClick()"
-                  [disabled]="isDrawBoxButtonDisabled || isTabsDisabled">
-        </p-button>
+        <div class="draw-buttons-container">
+          <p-button label="Draw Box"
+                    icon="pi pi-stop"
+                    styleClass="p-button-secondary p-button-sm"
+                    (onClick)="onDrawBoxClick()"
+                    [disabled]="isDrawBoxButtonDisabled || isTabsDisabled">
+          </p-button>
+          <p-button label="Apply Box"
+                    icon="pi pi-check"
+                    styleClass="p-button-success p-button-sm"
+                    (onClick)="onApplyBoxClick()"
+                    [disabled]="isApplyBoxButtonDisabled || isTabsDisabled">
+          </p-button>
+        </div>
         <small class="p-text-secondary d-block p-mt-2">
-          Select two points on the map to define the corners of the box.
+          Click "Draw Box", then select two opposite corners on the map.
         </small>
       </div>
     </div>

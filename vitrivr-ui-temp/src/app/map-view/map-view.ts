@@ -157,7 +157,34 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
    */
   circleLayer: L.Circle | null = null;
 
+  /**
+   * Flag indicating whether box drawing mode is active
+   */
+  drawingBox: boolean = false;
+
+  /**
+   * Reference to the rectangle layer on the map (finalized box)
+   */
+  rectangleLayer: L.Rectangle | null = null;
+
+  /**
+   * Temporary preview rectangle while picking the second corner
+   */
+  private boxPreviewLayer: L.Rectangle | null = null;
+
+  /**
+   * Stores the first corner clicked when drawing a box
+   */
+  private boxStartPoint: L.LatLng | null = null;
+
+  /**
+   * Flag controlling the visibility of the high-quality image viewer modal
+   */
   showHighQualityViewer = false;
+
+  /**
+   * URL of the high-quality image to display in the viewer
+   */
   highQualityImageUrl: string | null = null;
 
   /**
@@ -170,6 +197,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
    * Stored so it can be removed when drawing mode is deactivated
    */
   private drawClickHandler: ((e: L.LeafletMouseEvent) => void) | null = null;
+
+  /**
+   * Handlers for box drawing interactions (click and mousemove)
+   */
+  private boxClickHandler: ((e: L.LeafletMouseEvent) => void) | null = null;
+  private boxMouseMoveHandler: ((e: L.LeafletMouseEvent) => void) | null = null;
 
   /**
    * Flag to control the visibility of the map loading spinner.
@@ -226,19 +259,28 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
    * Angular lifecycle hook that runs after the view is initialized
    *
    * This method sets up subscriptions to the MapDrawingService observables to:
-   * - Activate circle drawing mode when requested
-   * - Update the circle when its data changes
-   * - Deactivate drawing mode when requested
-   * - Clear all drawings and deactivate drawing mode when drawing is canceled
+   * * - drawCircle → Activates circle drawing mode when triggered.
+   *  * - circleData → Updates the currently drawn circle when its center or radius changes.
+   *  * - drawBox → Activates rectangle drawing mode when triggered.
+   *  * - boxData → Updates the currently drawn rectangle when its coordinates change.
+   *  * - exitDrawingMode → Deactivates both circle and rectangle drawing modes without clearing shapes.
+   *  * - cancelDrawing → Clears all drawn shapes and deactivates all drawing modes.
+   *  *
    */
   ngAfterViewInit(): void {
     this.subscriptions.push(
       this.mapDrawingService.drawCircle$.subscribe(() => this.activateCircleDrawingMode()),
       this.mapDrawingService.circleData$.subscribe(data => this.updateCircle(data.center, data.radius)),
-      this.mapDrawingService.exitDrawingMode$.subscribe(() => this.deactivateCircleDrawingMode()),
+      this.mapDrawingService.drawBox$.subscribe(() => this.activateBoxDrawingMode()),
+      this.mapDrawingService.boxData$.subscribe(data => this.updateRectangle(data.northEast, data.southWest)),
+      this.mapDrawingService.exitDrawingMode$.subscribe(() => {
+        this.deactivateCircleDrawingMode();
+        this.deactivateBoxDrawingMode();
+      }),
       this.mapDrawingService.cancelDrawing$.subscribe(() => {
         this.clearAllDrawings();
         this.deactivateCircleDrawingMode();
+        this.deactivateBoxDrawingMode();
       })
     );
   }
@@ -281,8 +323,14 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     this.map.on('moveend', this.onMapMove.bind(this));
     this.map.on('zoomend', this.onMapMove.bind(this));
 
-    // Restore the circle if it exists in the initial state
-    if (this.initialMapState?.circle) {
+    // Restore previously stored shape with priority: box (persisted), else circle (persisted), else initial map state's circle
+    const persistedBox = this.mapDrawingService.currentBoxData.getValue();
+    const persistedCircle = this.mapDrawingService.currentCircleData.getValue();
+    if (persistedBox) {
+      this.updateRectangle(persistedBox.northEast, persistedBox.southWest);
+    } else if (persistedCircle) {
+      this.updateCircle(persistedCircle.center, persistedCircle.radius);
+    } else if (this.initialMapState?.circle) {
       this.updateCircle(this.initialMapState.circle.center, this.initialMapState.circle.radius);
     }
   }
@@ -437,7 +485,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
   }
 
   /**
-   * Updates the high-quality image URL to null and hides the viewer.
+   * Closes the high-quality image viewer
+   *
+   * This method:
+   * 1. Resets the high-quality image URL to null
+   * 2. Hides the viewer by setting showHighQualityViewer to false
+   * 3. Triggers change detection to update the UI
    */
   closeHighQualityViewer(): void {
     this.highQualityImageUrl = null;
@@ -447,8 +500,13 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
 
 
   /**
-   * Updates the tile layer on the map.
-   * @param layer The new map layer to apply.
+   * Updates the tile layer on the map
+   *
+   * This method:
+   * 1. Removes the existing tile layer if one exists
+   * 2. Creates and adds a new tile layer with the specified URL and attribution
+   *
+   * @param layer The new map layer configuration to apply
    */
   updateTileLayer(layer: MapLayer): void {
     if (!this.map) return;
@@ -498,6 +556,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
    */
   activateCircleDrawingMode() {
     if (!this.map) return;
+
+    // Ensure box drawing mode is not active simultaneously
+    if (this.drawingBox) {
+      this.deactivateBoxDrawingMode();
+    }
 
     // this.loggingService.info('MapViewComponent', 'Circle drawing mode activated');
     this.drawingCircle = true;
@@ -599,16 +662,181 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
   }
 
   /**
+   * Activates bounding box drawing mode on the map
+   *
+   * This method:
+   * 1. Ensures circle drawing mode is not active simultaneously
+   * 2. Sets the drawing box flag to true
+   * 3. Creates and displays an overlay message to guide the user
+   * 4. Sets up event handlers for:
+   *    - Clicks to select the two corners of the box
+   *    - Mouse movement to show a preview of the box while drawing
+   *
+   * The user clicks once for the first corner, moves the mouse to
+   * preview the box size and position, then clicks again to finalize.
+   */
+  activateBoxDrawingMode() {
+    if (!this.map) return;
+
+    // Ensure circle drawing mode is not active simultaneously
+    if (this.drawingCircle) {
+      this.deactivateCircleDrawingMode();
+    }
+
+    this.drawingBox = true;
+    this.boxStartPoint = null;
+
+    // Create an overlay message to guide the user
+    const overlay = document.createElement('div');
+    overlay.className = 'map-overlay-message';
+    overlay.innerText = 'Click first corner, then second. Press ESC to exit.';
+    overlay.style.position = 'absolute';
+    overlay.style.top = '20px';
+    overlay.style.left = '50%';
+    overlay.style.transform = 'translateX(-50%)';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+    overlay.style.color = 'white';
+    overlay.style.padding = '8px 12px';
+    overlay.style.borderRadius = '4px';
+    overlay.style.zIndex = '1000';
+    overlay.id = 'draw-mode-overlay';
+    this.elementRef.nativeElement.appendChild(overlay);
+
+    // Click handler for selecting corners
+    this.boxClickHandler = (e: L.LeafletMouseEvent) => {
+      if (!this.boxStartPoint) {
+        this.boxStartPoint = e.latlng;
+      } else {
+        const start = this.boxStartPoint;
+        const end = e.latlng;
+        this.mapDrawingService.setBoxData(start, end);
+        // Clear preview and reset for potential next box placement
+        if (this.boxPreviewLayer && this.map) {
+          this.map.removeLayer(this.boxPreviewLayer);
+          this.boxPreviewLayer = null;
+        }
+        this.boxStartPoint = null;
+      }
+    };
+    this.map.on('click', this.boxClickHandler);
+
+    // Mouse move handler to show preview rectangle while selecting second corner
+    this.boxMouseMoveHandler = (e: L.LeafletMouseEvent) => {
+      if (!this.map || !this.boxStartPoint) return;
+      const sw = L.latLng(
+        Math.min(this.boxStartPoint.lat, e.latlng.lat),
+        Math.min(this.boxStartPoint.lng, e.latlng.lng)
+      );
+      const ne = L.latLng(
+        Math.max(this.boxStartPoint.lat, e.latlng.lat),
+        Math.max(this.boxStartPoint.lng, e.latlng.lng)
+      );
+      const bounds = L.latLngBounds(sw, ne);
+      if (this.boxPreviewLayer) {
+        this.boxPreviewLayer.setBounds(bounds);
+      } else {
+        this.boxPreviewLayer = L.rectangle(bounds, {
+          color: '#4285F4',
+          weight: 2,
+          fillOpacity: 0.2
+        });
+        this.boxPreviewLayer.addTo(this.map);
+      }
+    };
+    this.map.on('mousemove', this.boxMouseMoveHandler);
+  }
+
+  /**
+   * Deactivates bounding box drawing mode
+   *
+   * This method:
+   * 1. Sets the drawing box flag to false
+   * 2. Removes all event handlers related to box drawing
+   * 3. Cleans up the preview box layer if it exists
+   * 4. Resets the boxStartPoint to null
+   * 5. Removes the overlay message from the DOM
+   */
+  deactivateBoxDrawingMode() {
+    if (!this.map || !this.drawingBox) return;
+
+    this.drawingBox = false;
+
+    if (this.boxClickHandler) {
+      this.map.off('click', this.boxClickHandler);
+      this.boxClickHandler = null;
+    }
+    if (this.boxMouseMoveHandler) {
+      this.map.off('mousemove', this.boxMouseMoveHandler);
+      this.boxMouseMoveHandler = null;
+    }
+
+    if (this.boxPreviewLayer) {
+      this.map.removeLayer(this.boxPreviewLayer);
+      this.boxPreviewLayer = null;
+    }
+
+    this.boxStartPoint = null;
+
+    const overlay = this.elementRef.nativeElement.querySelector('#draw-mode-overlay');
+    if (overlay) overlay.remove();
+  }
+
+  /**
+   * Draws/updates the bounding rectangle on the map
+   *
+   * This method:
+   * 1. Clears any existing drawings on the map
+   * 2. Creates a rectangle using the provided corner coordinates
+   * 3. Adjusts the map view to ensure the rectangle is visible
+   * 4. Updates the map state
+   *
+   * @param northEast The northeast corner coordinates of the rectangle
+   * @param southWest The southwest corner coordinates of the rectangle
+   */
+  updateRectangle(northEast: L.LatLng, southWest: L.LatLng) {
+    if (!this.map) return;
+
+    this.clearAllDrawings();
+
+    const bounds = L.latLngBounds(southWest, northEast);
+    this.rectangleLayer = L.rectangle(bounds, {
+      color: '#4285F4',
+      weight: 2,
+      fillOpacity: 0.2
+    }).addTo(this.map);
+
+    // Ensure rectangle is visible
+    const mapBounds = this.map.getBounds();
+    if (!mapBounds.contains(bounds)) {
+      this.map.fitBounds(bounds);
+    }
+
+    this.onMapMove();
+  }
+
+  /**
    * Removes all circles from the map
    *
    * This method removes the current circle layer from the map and sets
    * the circleLayer reference to null.
    */
   clearAllDrawings() {
-    if (this.circleLayer && this.map) {
-      // this.loggingService.info('MapViewComponent', 'All drawings cleared from map');
-      this.map.removeLayer(this.circleLayer);
-      this.circleLayer = null;
+    if (this.map) {
+      // Remove circle if exists
+      if (this.circleLayer) {
+        this.map.removeLayer(this.circleLayer);
+        this.circleLayer = null;
+      }
+      // Remove finalized rectangle if exists
+      if (this.rectangleLayer) {
+        this.map.removeLayer(this.rectangleLayer);
+        this.rectangleLayer = null;
+      }
+      // Remove preview rectangle if exists
+      if (this.boxPreviewLayer) {
+        this.map.removeLayer(this.boxPreviewLayer);
+        this.boxPreviewLayer = null;
+      }
     }
   }
 
@@ -617,12 +845,13 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
    *
    * This method performs cleanup to prevent memory leaks:
    * 1. Unsubscribes from all RxJS subscriptions
-   * 2. Deactivates circle drawing mode to remove event handlers
+   * 2. Deactivates circle and box drawing mode to remove event handlers
    * 3. Clears all drawings from the map
    */
   ngOnDestroy() {
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.deactivateCircleDrawingMode();
+    this.deactivateBoxDrawingMode();
     this.clearAllDrawings();
     if (this.map && this.markersLayer) {
       this.map.removeLayer(this.markersLayer);
