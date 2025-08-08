@@ -2,12 +2,14 @@ import { Component, Input, Output, EventEmitter, OnChanges, OnDestroy, SimpleCha
 import { CommonModule } from '@angular/common';
 import { ImageService } from '../services/image.service';
 import { LoggingService } from '../services/logging.service';
+import { GeocodingService, GeocodingResult } from '../services/geocoding.service';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { ButtonModule } from 'primeng/button';
 import { TooltipModule } from 'primeng/tooltip';
 import { ScrollingModule, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
-import { fromEvent, Subscription } from 'rxjs';
-import { debounceTime, throttleTime } from 'rxjs/operators';
+import { Subscription } from 'rxjs';
+import { throttleTime } from 'rxjs/operators';
+import { CountryFlagPipe } from '../pipes/country-flag.pipe';
 
 /**
  * Represents an item in search results that may contain an ID in various formats
@@ -34,6 +36,10 @@ interface ImageModel {
   error: boolean;
   timestamp?: string;
   location?: { latitude: number; longitude: number };
+  locationName?: string; // for reverse geocoding
+  country?: string; // ISO country code
+  subdivision1?: string; // State/province
+  subdivision2?: string; // County/district
   isHovering: boolean;
 }
 
@@ -45,7 +51,7 @@ const GRID_COLUMNS = 4;
   templateUrl: './gallery-view.html',
   styleUrls: ['./gallery-view.scss'],
   standalone: true,
-  imports: [CommonModule, ProgressSpinnerModule, ButtonModule, TooltipModule, ScrollingModule]
+  imports: [CommonModule, ProgressSpinnerModule, ButtonModule, TooltipModule, ScrollingModule, CountryFlagPipe]
 })
 
 
@@ -80,7 +86,8 @@ export class GalleryViewComponent implements OnChanges, OnDestroy, AfterViewInit
 
   constructor(
     private imageService: ImageService,
-    private loggingService: LoggingService
+    private loggingService: LoggingService,
+    private geocodingService: GeocodingService
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -167,19 +174,33 @@ export class GalleryViewComponent implements OnChanges, OnDestroy, AfterViewInit
 
     // Format Spatial Query
     if (spatialQuery) {
-      switch (spatialQuery.type) {
-        case 'city':
-          parts.push(`near the city of '${spatialQuery.data.name}'`);
-          break;
-        case 'circle':
-          const radiusKm = (spatialQuery.data.radius / 1000).toFixed(2);
-          const lat = spatialQuery.data.center.lat.toFixed(4);
-          const lng = spatialQuery.data.center.lng.toFixed(4);
-          parts.push(`within ${radiusKm} km of point (${lat}, ${lng})`);
-          break;
-        case 'bbox':
-          parts.push('within a selected bounding box');
-          break;
+      // Check for the displayData property first
+      if (spatialQuery.displayData && spatialQuery.displayData.locationName) {
+        const name = spatialQuery.displayData.locationName;
+        const subdivision2 = spatialQuery.displayData.subdivision2;
+        const subdivision1 = spatialQuery.displayData.subdivision1;
+        const country = spatialQuery.displayData.countryCode;
+
+        // Build location string with available subdivisions
+        let locationStr = name;
+        if (subdivision2) {
+          locationStr += `, ${subdivision2}`;
+        }
+        if (subdivision1) {
+          locationStr += `, ${subdivision1}`;
+        }
+        locationStr += ` (${country})`;
+
+        const radiusKm = (spatialQuery.data.radius / 1000).toFixed(2);
+        parts.push(`within ${radiusKm} km of ${locationStr}`);
+      } else if (spatialQuery.type === 'circle') {
+        // Fallback to coordinates if no display name is available
+        const radiusKm = (spatialQuery.data.radius / 1000).toFixed(2);
+        const lat = spatialQuery.data.center.lat.toFixed(4);
+        const lng = spatialQuery.data.center.lng.toFixed(4);
+        parts.push(`within ${radiusKm} km of point (${lat}, ${lng})`);
+      } else if (spatialQuery.type === 'bbox') {
+        parts.push('within a selected bounding box');
       }
     }
 
@@ -348,6 +369,7 @@ export class GalleryViewComponent implements OnChanges, OnDestroy, AfterViewInit
   /**
    * Handles the click event on an image in the gallery. Updates the selected image,
    * gets the direct URL to the high-quality version of the image, and prepares it for display.
+   * Also performs reverse geocoding to get the location name if coordinates are available.
    *
    * @param {ImageModel} image The image object that was clicked.
    */
@@ -358,6 +380,41 @@ export class GalleryViewComponent implements OnChanges, OnDestroy, AfterViewInit
     // Get direct URL to the high-quality image
     this.highQualityImageUrl = this.imageService.getImageUrl('sandbox', 'original', image.id);
     this.showHighQuality = true;
+
+    // Perform reverse geocoding if location coordinates are available
+    if (image.location && !image.locationName) {
+      this.geocodingService.waitForLoad().subscribe(loaded => {
+        if (loaded && image.location) {
+          const result = this.geocodingService.findNearestCity(
+            image.location.latitude,
+            image.location.longitude
+          );
+
+          if (result) {
+            // Update the image model with the location name, country, and subdivisions
+            image.locationName = result.city.name;
+            image.country = result.city.country ?? 'N/A';
+            image.subdivision1 = result.city.subdivision1 ?? 'N/A';
+            image.subdivision2 = result.city.subdivision2 ?? 'N/A';
+
+            // If this is the selected image, update the reference
+            if (this.selectedImage && this.selectedImage.id === image.id) {
+              this.selectedImage = { ...image };
+            }
+
+            this.loggingService.info('GalleryViewComponent', `Reverse geocoded location for ${image.id}`, {
+              coordinates: `${image.location.latitude}, ${image.location.longitude}`,
+              locationName: image.locationName,
+              country: image.country,
+              subdivision1: image.subdivision1,
+              subdivision2: image.subdivision2,
+              distance: result.distance
+            });
+          }
+        }
+      });
+    }
+
     this.loggingService.info('GalleryViewComponent', `Set high-quality image URL for ${image.id}`);
   }
 

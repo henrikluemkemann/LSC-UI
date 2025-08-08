@@ -10,10 +10,14 @@ import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 import { MapDrawingService } from '../services/map-drawing.service';
 import { LoggingService } from '../services/logging.service';
+import { GeocodingService, City } from '../services/geocoding.service';
 import { Subscription } from 'rxjs';
 import * as L from 'leaflet';
 import { CalendarModule } from 'primeng/calendar';
+import { DialogModule } from 'primeng/dialog';
+import { TableModule } from 'primeng/table';
 import {QueryService, SpatialQuery} from '../services/query.service';
+import { CountryFlagPipe } from '../pipes/country-flag.pipe';
 
 /**
  * Component for building and managing search queries
@@ -38,7 +42,10 @@ import {QueryService, SpatialQuery} from '../services/query.service';
     CommonModule,
     SelectButtonModule,
     ToastModule,
-    CalendarModule
+    CalendarModule,
+    DialogModule,
+    TableModule,
+    CountryFlagPipe
   ],
   templateUrl: './query-panel.html',
   styleUrls: ['./query-panel.scss'],
@@ -107,8 +114,12 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
   citySearchTerm: string = '';
 
   /**
+   * The default radius for city search in meters
+   */
+  cityRadius: number = 5000;
+
+  /**
    * The currently active tab in the geographical search section
-   * Possible values: 'city', 'circle', or 'box'
    */
   activeTab: string = 'city';
 
@@ -160,6 +171,26 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
   showSlider: boolean = true;
 
   /**
+   * Flag to control the visibility of the city selection dialog
+   */
+  showCitySelectionDialog: boolean = false;
+
+  /**
+   * List of cities that match the search term
+   */
+  matchingCities: City[] = [];
+
+  /**
+   * The city selected from the dialog
+   */
+  selectedCity: City | null = null;
+
+  /**
+   * A boolean flag indicating whether the "Apply City" button is disabled.
+   */
+  isApplyCityButtonDisabled: boolean = true;
+
+  /**
    * Collection of RxJS subscriptions to be cleaned up on component destruction
    */
   private subscriptions: Subscription[] = [];
@@ -178,7 +209,8 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
     private messageService: MessageService,
     private cdr: ChangeDetectorRef,
     private loggingService: LoggingService,
-    private queryService: QueryService
+    private queryService: QueryService,
+    private geocodingService: GeocodingService
   ) {}
 
   /**
@@ -271,7 +303,7 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
     // Only consider the input from the currently active tab
     switch (this.activeTab) {
       case 'city':
-        hasGeoInput = this.citySearchTerm.trim().length > 0;
+        hasGeoInput = !!this.selectedCity && this.isApplyCityButtonDisabled;
         break;
       case 'circle':
         //circle is only valid input if it has been applied
@@ -478,11 +510,131 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
 
   /**
    * Handles changes to the city search input
-   * TODO: placeholder for future implementation
    */
   onCitySearchChange() {
+    this.selectedCity = null;
+    this.isApplyCityButtonDisabled = true;
+    this.mapDrawingService.cancelDrawing();
     this.updateApplySearchButtonState();
-    this.loggingService.info('QueryPanelComponent', 'City search term changed', { term: this.citySearchTerm });
+    this.loggingService.info('QueryPanelComponent', 'City search term changed', {term: this.citySearchTerm});
+  }
+
+  /**
+   * Handles the city search button click
+   *
+   * This method:
+   * 1. Looks up cities with the partial name using the geocoding service
+   * 2. If at least one city is found, show the selection dialog
+   * 3. If no cities are found, displays an error message
+   */
+  onCitySearch() {
+    if (!this.citySearchTerm) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Missing City',
+        detail: 'Please enter a city name to search.',
+        life: 3000
+      });
+      return;
+    }
+
+    this.loggingService.info('QueryPanelComponent', 'City search button clicked', {cityName: this.citySearchTerm});
+
+    // Look up cities using the geocoding service
+    this.geocodingService.waitForLoad().subscribe(loaded => {
+      if (loaded) {
+        const cities = this.geocodingService.findCitiesByPartialName(this.citySearchTerm);
+
+        if (cities.length === 1) {
+          this.matchingCities = cities;
+          this.showCitySelectionDialog = true;
+        } else if (cities.length > 1) {
+          // Multiple cities found, show selection dialog
+          this.matchingCities = cities;
+          this.showCitySelectionDialog = true;
+        } else {
+          // No cities found, display error message
+          this.messageService.add({
+            severity: 'error',
+            summary: 'City Not Found',
+            detail: `Could not find "${this.citySearchTerm}" in the database.`,
+            life: 5000
+          });
+        }
+      } else {
+        // Geocoding service not loaded, display error message
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Service Unavailable',
+          detail: 'The geocoding service is not available. Please try again later.',
+          life: 5000
+        });
+      }
+    });
+  }
+
+  /**
+   * Handles city selection from the dialog
+   *
+   * @param city The selected city
+   */
+  onSelectCity(city: City) {
+    this.loggingService.info('QueryPanelComponent', 'City selected', city);
+    this.selectedCity = city;
+
+    this.citySearchTerm = this.geocodingService.getFormattedCityName(city);
+    this.showCitySelectionDialog = false;
+    this.matchingCities = [];
+    this.isApplyCityButtonDisabled = false;
+
+    this.updateCityCircleOnMap();
+    this.updateApplySearchButtonState();
+    this.applyCitySelection();
+  }
+
+  /**
+   * Applies the selected city to the map
+   */
+  private applyCitySelection() {
+    if (!this.selectedCity) return;
+
+    // Create a circle at the city's location
+    const cityLocation = new L.LatLng(this.selectedCity.latitude, this.selectedCity.longitude);
+
+    // Update the map with the city location and radius (should also cause map to zoom to desired city)
+    this.mapDrawingService.setCircleData(cityLocation, this.cityRadius);
+
+    // Get formatted city name with subdivisions
+    const formattedCityName = this.geocodingService.getFormattedCityName(this.selectedCity);
+
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Location Found',
+      detail: `Located ${formattedCityName} and applied a ${this.cityRadius}m radius.`,
+      life: 3000
+    });
+
+    this.updateApplySearchButtonState();
+  }
+
+  /**
+   * Handles changes to the city radius slider
+   */
+  onCityRadiusChange() {
+    if (this.selectedCity) {
+      this.isApplyCityButtonDisabled = false;
+      this.cdr.detectChanges();
+    }
+    this.updateCityCircleOnMap();
+    this.loggingService.info('QueryPanelComponent', 'City radius changed', { radius: this.cityRadius });
+    this.updateApplySearchButtonState();
+  }
+
+  private updateCityCircleOnMap() {
+    if (this.selectedCity) {
+      const cityLocation = new L.LatLng(this.selectedCity.latitude, this.selectedCity.longitude);
+      this.mapDrawingService.setCircleData(cityLocation, this.cityRadius);
+    }
   }
 
   /**
@@ -504,11 +656,20 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
         break;
 
       case 'city':
-        if (this.citySearchTerm) {
-          // For city search, we'll use a fixed radius of 10km for now.
-          // This could be made into an input field.
-          const radiusForCity = 10000;
-          spatialQuery = { type: 'city', data: { name: this.citySearchTerm, radius: radiusForCity } };
+        if (this.selectedCity) {
+          spatialQuery = {
+            type: 'circle',
+            data: {
+              center: new L.LatLng(this.selectedCity.latitude, this.selectedCity.longitude),
+              radius: this.cityRadius
+            },
+            displayData: {
+              locationName: this.selectedCity.name,
+              countryCode: this.selectedCity.country ?? 'N/A',
+              subdivision1: this.selectedCity.subdivision1 ?? 'N/A',
+              subdivision2: this.selectedCity.subdivision2 ?? 'N/A'
+            }
+          };
         }
         break;
 
@@ -620,6 +781,36 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   /**
+   * Handles the "Apply Circle" button click in the city search tab.
+   * This method finalizes the user's choice of city and radius, making it ready for the main search.
+   */
+  onApplyCityCircle() {
+    if (!this.selectedCity) {
+      this.loggingService.warn('QueryPanelComponent', 'onApplyCityCircle called without a selected city.');
+      return;
+    }
+
+    this.loggingService.info('QueryPanelComponent', 'Apply City Circle clicked', {
+      city: this.selectedCity.name,
+      radius: this.cityRadius
+    });
+
+    const cityLocation = new L.LatLng(this.selectedCity.latitude, this.selectedCity.longitude);
+    this.mapDrawingService.setCircleData(cityLocation, this.cityRadius);
+
+    // The button should be re enabled if the user changes the search term or radius.
+    this.isApplyCityButtonDisabled = true;
+    this.updateApplySearchButtonState();
+
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Location Set',
+      detail: `Set location to ${this.selectedCity.name} with a ${this.cityRadius}m radius.`,
+      life: 3000
+    });
+  }
+
+  /**
    * Handles changes to the circle radius
    *
    * This method updates the circle on the map when the radius changes,
@@ -656,6 +847,15 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
     } else {
       return `${this.circleRadius} km`;
     }
+  }
+
+  /**
+   * Gets the formatted city radius string
+   *
+   * @returns A string representing the city radius in meters (e.g., "5000 m")
+   */
+  getFormattedCityRadius(): string {
+    return `${this.cityRadius} m`;
   }
 
   /**

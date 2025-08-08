@@ -64,6 +64,101 @@
       margin-left: 0.5rem;
     }
   }
+
+  .city-dialog {
+    .p-dialog-content {
+      padding: 0.5rem 1.5rem 1.5rem 1.5rem;
+    }
+
+    .dialog-intro {
+      text-align: center;
+      margin-bottom: 1.5rem;
+      p {
+        margin: 0;
+        font-size: 1.1rem;
+      }
+      small {
+        color: var(--text-color-secondary);
+      }
+    }
+
+    .city-selection-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .city-item {
+      display: flex;
+      align-items: center;
+      padding: 1rem;
+      border-radius: var(--border-radius);
+      border: 1px solid transparent;
+      transition: background-color 0.2s, border-color 0.2s;
+      cursor: default;
+
+      &:hover {
+        background-color: var(--surface-hover);
+        border-color: var(--surface-300);
+      }
+
+      .city-icon {
+        font-size: 1.5rem;
+        color: var(--primary-color);
+        margin-right: 1rem;
+      }
+
+      .city-details {
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+
+        .city-name {
+          font-weight: 600;
+          font-size: 1rem;
+          color: var(--text-color);
+        }
+
+        .city-subdivision {
+          font-size: 0.8rem;
+          color: var(--text-color-secondary);
+          margin-top: 0.25rem;
+        }
+      }
+
+      .country-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.25rem;
+      }
+
+      .flag-emoji {
+        font-size: 1.25rem;
+        line-height: 1;
+      }
+
+      .country-code {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-color-secondary);
+      }
+
+      .city-population {
+        margin-right: 1.5rem;
+        text-align: right;
+
+        .population-value {
+          font-weight: 600;
+          display: block;
+        }
+        small {
+          font-size: 0.75rem;
+          color: var(--text-color-secondary);
+        }
+      }
+    }
+  }
 }
 
 
@@ -154,4 +249,16 @@ h5 {
   display: flex;
   justify-content: center;
   padding-top: 1rem;
+}
+
+.search-tabs .tab-content {
+  > .p-inputgroup,
+  > .p-field,
+  > .draw-buttons-container {
+    margin-bottom: 1.5rem;
+  }
+
+  > *:last-child {
+    margin-bottom: 0;
+  }
 }

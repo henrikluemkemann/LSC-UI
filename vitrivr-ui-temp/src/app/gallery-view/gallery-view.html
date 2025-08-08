@@ -6,7 +6,12 @@
 
   <div class="gallery-header" *ngIf="!loading">
     <div class="criteria-summary">
-      <h2>Gallery</h2>
+      <div class="title-container">
+        <h2>Gallery</h2>
+        <span class="summary-flag" *ngIf="queryCriteria?.spatialQuery?.displayData?.countryCode">
+        {{ queryCriteria.spatialQuery.displayData.countryCode | countryFlag }}
+      </span>
+      </div>
       <p>{{ searchCriteriaSummary }}</p>
     </div>
 
@@ -76,8 +81,24 @@
       </div>
       <div class="detail-item">
         <label>Location</label>
-        <span *ngIf="selectedImage.location">{{ selectedImage.location.latitude }}, {{ selectedImage.location.longitude }}</span>
-        <span *ngIf="!selectedImage.location">Unknown</span>
+        <div *ngIf="selectedImage.location; else unknownLocation" class="location-container">
+          <span class="flag-emoji">{{ selectedImage.country | countryFlag }}</span>
+          <div class="location-text-details">
+            <div class="location-name">
+              <span>{{ selectedImage.locationName || 'Geocoding...' }}</span>
+            </div>
+            <div class="location-subdivision">
+              <span *ngIf="selectedImage.subdivision1"><strong>State:</strong> {{ selectedImage.subdivision1 }}, </span>
+              <span *ngIf="selectedImage.country"><strong>Country:</strong> {{ selectedImage.country }}</span>
+            </div>
+            <div class="location-coords">
+              Lat: {{ selectedImage.location.latitude | number:'1.4-4' }}, Lon: {{ selectedImage.location.longitude | number:'1.4-4' }}
+            </div>
+          </div>
+        </div>
+        <ng-template #unknownLocation>
+          <span>Unknown</span>
+        </ng-template>
       </div>
     </div>
     <div class="image-container">

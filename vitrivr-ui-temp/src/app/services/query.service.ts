@@ -29,7 +29,7 @@ export interface VitrivrQuery {
  * - null: No spatial query
  */
 export type SpatialQuery =
-  | { type: 'circle'; data: { center: L.LatLng; radius: number } }
+  | { type: 'circle'; data: { center: L.LatLng; radius: number }; displayData?: { locationName: string; countryCode: string; subdivision1?: string; subdivision2?: string; } }
   | { type: 'city'; data: { name: string; radius: number } }
   | { type: 'bbox'; data: { northEast: L.LatLng; southWest: L.LatLng } }
   | null;

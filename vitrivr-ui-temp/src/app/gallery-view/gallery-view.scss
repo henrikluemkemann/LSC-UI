@@ -22,6 +22,17 @@
   border-bottom: 1px solid #e2e8f0;
 }
 
+.criteria-summary .title-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.criteria-summary .summary-flag {
+  font-size: 2rem;
+  line-height: 1;
+}
+
 .criteria-summary h2 {
   font-size: 1.8rem;
   font-weight: 600;
@@ -199,6 +210,52 @@
           font-size: 0.95rem;
           font-weight: 500;
         }
+      }
+
+
+      .location-container {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+      }
+
+      .flag-emoji {
+        font-size: 1.5rem;
+      }
+
+      .location-text-details {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .location-name {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-top: 0.3rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .location-subdivision,
+      .location-coords {
+        font-size: 0.9rem;
+        color: #a0a0a0;
+        margin-bottom: 0.25rem;
+        padding-left: 0;
+
+        strong {
+          color: #c0c0c0;
+          font-weight: 500;
+        }
+      }
+
+      .location-coords {
+        font-family: monospace;
+        font-size: 0.8rem;
+        color: #888;
       }
     }
 
