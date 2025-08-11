@@ -226,7 +226,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     private loggingService: LoggingService,
     private mapLayerService: MapLayerService,
     private imageService: ImageService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private messageService: MessageService
   ) {
     this.markersLayer = L.markerClusterGroup();
 
@@ -382,6 +383,19 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
       });
       this.markersLayer.addLayers(markersToAdd);
       this.loggingService.info('MapViewComponent', `Added ${markersToAdd.length} markers to the map cluster.`);
+    } else {
+      // No images with GPS coordinates found. If there were query results without coordinates,
+      // inform the user that no markers could be placed.
+      const totalItems = this.extractResultItems(this.queryResults)?.length || 0;
+      if (totalItems > 0) {
+        this.loggingService.warn('MapViewComponent', 'No GPS coordinates found in current results; 0 markers placed.', { totalItems });
+        this.messageService.add({
+          severity: 'info',
+          summary: 'No locations to display',
+          detail: 'None of the images in the current results contain GPS coordinates. No markers could be placed on the map.',
+          life: 6000
+        });
+      }
     }
   }
 

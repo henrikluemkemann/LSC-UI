@@ -276,6 +276,10 @@
       }
       .viewer-actions {
         margin-top: 1.5rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+
         .download-button {
           display: inline-block;
           background-color: #ffffff;
@@ -285,10 +289,26 @@
           text-decoration: none;
           font-weight: 600;
           font-size: 0.9rem;
-          transition: background-color 0.2s ease;
+          border: none;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          -webkit-appearance: none;
+          appearance: none;
+          transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
 
           &:hover {
             background-color: #f0f0f0;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+          }
+
+          &:active {
+            transform: translateY(1px);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+          }
+
+          &:focus-visible {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
           }
         }
       }

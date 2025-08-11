@@ -430,6 +430,48 @@ export class GalleryViewComponent implements OnChanges, OnDestroy, AfterViewInit
   }
 
   /**
+   * Downloads the currently selected high-quality image as a file, avoiding browser navigation.
+   */
+  async downloadHighQualityImage(event?: Event): Promise<void> {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    if (!this.highQualityImageUrl || !this.selectedImage) {
+      this.loggingService.warn('GalleryViewComponent', 'Download requested but no image is selected.');
+      return;
+    }
+
+    const filename = `high-quality-${this.selectedImage.id}.jpg`;
+
+    try {
+      // Fetch as blob so browser download works
+      const response = await fetch(this.highQualityImageUrl, { mode: 'cors' });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      this.loggingService.info('GalleryViewComponent', `Triggered download for ${filename}`);
+    } catch (err: any) {
+      this.loggingService.error('GalleryViewComponent', 'Failed to download image, opening in new tab as fallback.', { error: String(err) });
+      // Fallback: open the image URL in a new tab
+      window.open(this.highQualityImageUrl, '_blank');
+    }
+  }
+
+  /**
    * Generates the alt text for an image based on its state.
    * @param image The image object.
    * @returns The appropriate alt text string.

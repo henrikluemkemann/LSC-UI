@@ -184,7 +184,7 @@
       <div class="city-details">
         <span class="city-name">{{ city.name }}</span>
         <div class="country-info">
-          <span class="flag-emoji">{{ city.country | countryFlag }}</span>
+          <span class="flag-emoji" [innerHTML]="city.country | countryFlag"></span>
           <span class="country-code">{{ city.country }}</span>
         </div>
         <small class="city-subdivision">
