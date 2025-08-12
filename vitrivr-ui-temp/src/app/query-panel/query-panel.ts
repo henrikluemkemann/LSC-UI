@@ -785,10 +785,29 @@ export class QueryPanelComponent implements OnInit, OnDestroy, OnChanges {
    * @param tab The tab to activate ('city', 'circle', or 'box')
    */
   setActiveTab(tab: string) {
+    if (tab === this.activeTab) {
+      return;
+    }
     this.loggingService.info('QueryPanelComponent', 'Active tab changed', {
       previousTab: this.activeTab,
       newTab: tab
     });
+
+    // If leaving a drawing tab with a valid shape, automatically apply it
+    if (this.activeTab === 'circle' && !this.isApplyCircleButtonDisabled) {
+      // There is a circle drawn but not yet applied
+      this.loggingService.info('QueryPanelComponent', 'Auto-applying circle on tab switch');
+      this.onApplyCircle();
+    } else if (this.activeTab === 'box' && !this.isApplyBoxButtonDisabled) {
+      // There is a box drawn but not yet applied
+      this.loggingService.info('QueryPanelComponent', 'Auto-applying box on tab switch');
+      this.onApplyBoxClick();
+    } else if (this.activeTab === 'city' && this.selectedCity && !this.isApplyCityButtonDisabled) {
+      // There is a selected city not yet applied
+      this.loggingService.info('QueryPanelComponent', 'Auto-applying city selection on tab switch');
+      this.onApplyCityCircle();
+    }
+
     this.activeTab = tab;
     this.updateApplySearchButtonState(); // Update Apply Search button state when tab changes
   }
