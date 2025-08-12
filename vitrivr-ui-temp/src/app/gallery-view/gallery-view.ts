@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, OnDestroy, SimpleChanges, ViewChild, AfterViewInit, ElementRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, OnDestroy, SimpleChanges, ViewChild, AfterViewInit, ElementRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ImageService } from '../services/image.service';
 import { LoggingService } from '../services/logging.service';
@@ -74,6 +74,9 @@ export class GalleryViewComponent implements OnChanges, OnDestroy, AfterViewInit
   selectedImage: ImageModel | null = null;
   currentSortDirection: 'asc' | 'desc' = 'desc';
 
+  // Dynamic row height for CDK Virtual Scroll (matches one square image width)
+  rowHeight: number = 300;
+
   //path to placeholder image for failed loads
   private brokenImageUrl = '/assets/broken-image.png';
 
@@ -109,6 +112,8 @@ export class GalleryViewComponent implements OnChanges, OnDestroy, AfterViewInit
   }
 
   ngAfterViewInit(): void {
+    // Compute initial row height based on viewport width
+    this.updateRowHeight();
     // Set up scroll detection once the view is initialized
     if (this.virtualScroll) {
       // Add a subscription to detect when scrolling starts
@@ -147,6 +152,41 @@ export class GalleryViewComponent implements OnChanges, OnDestroy, AfterViewInit
 
     // Unsubscribe from all subscriptions
     this.subscriptions.forEach(sub => sub.unsubscribe());
+  }
+
+  private updateRowHeight(): void {
+    // Determine the width of the virtual scroll viewport; fallback to container width
+    let viewportWidth = 0;
+    try {
+      if (this.virtualScroll && (this.virtualScroll as any).elementRef?.nativeElement) {
+        viewportWidth = (this.virtualScroll as any).elementRef.nativeElement.clientWidth;
+      }
+    } catch {}
+    if (!viewportWidth && this.galleryContainer?.nativeElement) {
+      viewportWidth = this.galleryContainer.nativeElement.clientWidth;
+    }
+    if (!viewportWidth) {
+      // keep default if we cannot determine yet
+      return;
+    }
+    // Each row height equals one square image width (flex-basis 25%) including internal paddings
+    const computed = Math.floor(viewportWidth / GRID_COLUMNS);
+    if (computed !== this.rowHeight) {
+      this.rowHeight = computed;
+      // Inform the virtual scroll viewport that size has changed
+      if (this.virtualScroll) {
+        // Preserve current scroll offset to prevent visible jumps
+        const currentOffset = this.virtualScroll.measureScrollOffset();
+        this.virtualScroll.checkViewportSize();
+        // Restore offset
+        this.virtualScroll.scrollToOffset(currentOffset, 'auto');
+      }
+    }
+  }
+
+  @HostListener('window:resize')
+  onWindowResize() {
+    this.updateRowHeight();
   }
 
   private chunkImagesIntoRows(images: ImageModel[]): void {
@@ -362,6 +402,8 @@ export class GalleryViewComponent implements OnChanges, OnDestroy, AfterViewInit
       return direction === 'asc' ? dateA - dateB : dateB - dateA;
     });
     this.chunkImagesIntoRows(this.images); // Re-chunk the sorted images
+    // Ensure virtual scroll metrics match content dimensions
+    this.updateRowHeight();
     this.loggingService.info('GalleryViewComponent', `Images sorted by date ${direction === 'asc' ? 'ascending' : 'descending'}.`);
   }
 
